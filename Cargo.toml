@@ -1,0 +1,28 @@
+[package]
+name = "wisdom"
+version = "0.1.0"
+edition = "2021"
+description = "A bot to serve various meme-related purposes within a personal Discord server."
+readme = "README.md"
+repository = "https://github.com/Lyrenhex/Wisdom"
+license = "MIT OR Apache-2.0"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.17", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.serenity]
+version = "0.10"
+default-features = false
+features = [
+    "builder",
+    "cache",
+    "client",
+    "gateway",
+    "http",
+    "model",
+    "utils",
+    "rustls_backend",
+]
