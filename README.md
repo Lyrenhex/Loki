@@ -1,2 +1,3 @@
-# Wisdom
-A bot to serve various meme-related purposes within a personal Discord server.
+# Loki
+The trickster ~~god~~ bot, for all your friend group's Discord
+server memetic needs.
