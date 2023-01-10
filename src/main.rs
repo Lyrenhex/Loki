@@ -1,55 +1,35 @@
-use serenity::async_trait;
-use serenity::client::{Client, Context, EventHandler};
-use serenity::model::prelude::Member;
-use serenity::model::prelude::UserId;
+mod command;
+mod config;
+mod serenity_handler;
+
+use log::error;
 use serenity::prelude::GatewayIntents;
 
-use std::collections::HashMap;
-use std::env;
-
-struct Handler {
-    names: HashMap<UserId, String>,
-}
-
-impl Handler {
-    pub fn new() -> Self {
-        Self {
-            names: HashMap::new(),
-        }
-    }
-}
-
-#[async_trait]
-impl EventHandler for Handler {
-    // Note: This event will not trigger unless the "guild members" privileged intent is enabled on the bot application page.
-    async fn guild_member_update(&self, context: Context, _old: Option<Member>, new: Member) {
-        if !self.names.contains_key(&new.user.id) {
-            return;
-        }
-
-        if let Err(e) = new
-            .edit(context.http.clone(), |m| {
-                m.nickname(self.names.get(&new.user.id).unwrap())
-            })
-            .await
-        {
-            eprintln!(
-                "Error changing nickname of {} ({}) in guild {}: {}",
-                new.user.id, new.user.name, new.guild_id, e
-            )
-        }
-    }
-}
+use command::Command;
+use config::Config;
+use serenity_handler::SerenityHandler;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
+    let config = Config::load();
+
+    let commands = generate_commands();
+
+    let handler = SerenityHandler::new(commands);
+
     // Login with a bot token from the environment
-    let token = env::var("LOKI_DISCORD_TOKEN").expect("token");
-    let handler = Handler::new();
-    let mut client = Client::builder(token, GatewayIntents::non_privileged())
+    let mut client = config
+        .discord_client(GatewayIntents::non_privileged())
         .event_handler(handler)
         .await
         .expect("Error creating client");
+
+    {
+        let mut data = client.data.write().await;
+        data.insert::<Config>(config);
+    }
 
     loop {
         // start listening for events by starting a single shard
@@ -57,10 +37,74 @@ async fn main() {
             match err {
                 _ => {
                     // unknown error (fatal): announce and terminate.
-                    eprintln!("[FATAL] ERROR: {:?}", err);
+                    error!("*FATAL*: {:?}", err);
                     break;
                 }
             }
         }
     }
+}
+
+fn generate_commands() -> Vec<Command<'static>> {
+    vec![
+        Command::new(
+            "about",
+            "Provides information about Loki.",
+            Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let manager_tag = ctx
+                        .data
+                        .read()
+                        .await
+                        .get::<Config>()
+                        .unwrap()
+                        .get_manager()
+                        .to_user(&ctx.http)
+                        .await
+                        .unwrap()
+                        .tag();
+                    command::create_response(
+                        &ctx.http,
+                        command,
+                        &format!(
+                            "Loki is a trickster ~~god~~ bot.
+This is a rolling release.
+You can [find the source here](https://github.com/Lyrenhex/Loki).
+
+This instance of Loki is managed by {manager_tag}."
+                        ),
+                    )
+                    .await;
+                })
+            }),
+        ),
+        Command::new(
+            "status_meaning",
+            "Retrieves the meaning of the bot managers's current Discord status.",
+            Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let data = ctx.data.read().await;
+                    let config = data.get::<Config>().unwrap();
+                    let manager = config.get_manager().to_user(&ctx.http).await.unwrap().tag();
+                    let resp = match config.get_status_meaning() {
+                        Some(meaning) => format!(
+                            "**Status meaning:**
+
+> {meaning}
+
+_If this meaning doesn't make sense, yell at {manager} to update \
+this!_"
+                        ),
+                        None => format!(
+                            "**No known meaning.**
+
+Assuming there _is_, in fact, a status message, you likely need to \
+prod {manager} to update this."
+                        ),
+                    };
+                    command::create_response(&ctx.http, command, &resp).await;
+                })
+            }),
+        ),
+    ]
 }
