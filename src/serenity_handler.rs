@@ -1,4 +1,4 @@
-use log::info;
+use log::{error, info};
 use serenity::{
     async_trait,
     model::prelude::{command::Command, interaction::Interaction, Activity, Ready},
@@ -25,7 +25,8 @@ impl EventHandler for SerenityHandler<'_> {
         if let Interaction::ApplicationCommand(mut command) = interaction {
             for cmd in self.commands.iter() {
                 if cmd.name() == command.data.name {
-                    if let Err(_e) = cmd.run(&ctx, &mut command).await {
+                    if let Err(e) = cmd.run(&ctx, &mut command).await {
+                        error!("Error running '{}': {e:?}", cmd.name());
                         todo!("error handling");
                     }
                     break;

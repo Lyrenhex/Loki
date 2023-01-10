@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub enum Error {
     SerenityError(serenity::Error),
 }
