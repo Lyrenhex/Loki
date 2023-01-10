@@ -66,25 +66,8 @@ impl<'a> Command<'a> {
         &self.description
     }
 
-    /// Run the appropriate routine for the given [Command].
-    ///
-    /// This function, per [crate::SerenityHandler], is guaranteed to
-    /// be executed on the respective [Command], but as we cannot tie
-    /// the function to be executed in memory, we must still perform
-    /// a match on the [Command]'s name.
-    ///
-    /// This will default to writing an error to the log _and_ in the
-    /// Discord output should an entry not be found for the given
-    /// [Command] name.
+    /// Run the [ActionRoutine] for this [Command].
     pub async fn run(&self, ctx: &Context, command: &mut ApplicationCommandInteraction) {
-        // match self.name {
-        //     "about" => about::about(ctx, command).await,
-        //     other => {
-        //         error!("Unhandled command: {}", other);
-        //         unhandled::unhandled(ctx, command).await
-        //     }
-        // }
-
         (self.action)(ctx, command).await;
     }
 }
