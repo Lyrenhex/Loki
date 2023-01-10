@@ -15,7 +15,8 @@ type ActionRoutine = Box<
     dyn (for<'b> Fn(
             &'b Context,
             &'b mut ApplicationCommandInteraction,
-        ) -> Pin<Box<dyn std::future::Future<Output = ()> + Send + Sync + 'b>>)
+        )
+            -> Pin<Box<dyn std::future::Future<Output = crate::Result> + Send + Sync + 'b>>)
         + Sync
         + Send,
 >;
@@ -67,8 +68,12 @@ impl<'a> Command<'a> {
     }
 
     /// Run the [ActionRoutine] for this [Command].
-    pub async fn run(&self, ctx: &Context, command: &mut ApplicationCommandInteraction) {
-        (self.action)(ctx, command).await;
+    pub async fn run(
+        &self,
+        ctx: &Context,
+        command: &mut ApplicationCommandInteraction,
+    ) -> crate::Result {
+        (self.action)(ctx, command).await
     }
 }
 

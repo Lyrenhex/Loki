@@ -25,7 +25,9 @@ impl EventHandler for SerenityHandler<'_> {
         if let Interaction::ApplicationCommand(mut command) = interaction {
             for cmd in self.commands.iter() {
                 if cmd.name() == command.data.name {
-                    cmd.run(&ctx, &mut command).await;
+                    if let Err(_e) = cmd.run(&ctx, &mut command).await {
+                        todo!("error handling");
+                    }
                     break;
                 }
             }

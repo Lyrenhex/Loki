@@ -1,5 +1,6 @@
 mod command;
 mod config;
+mod error;
 mod serenity_handler;
 
 use log::error;
@@ -7,7 +8,10 @@ use serenity::prelude::GatewayIntents;
 
 use command::Command;
 use config::Config;
+pub use error::Error;
 use serenity_handler::SerenityHandler;
+
+pub type Result = core::result::Result<(), Error>;
 
 #[tokio::main]
 async fn main() {
@@ -60,8 +64,7 @@ fn generate_commands() -> Vec<Command<'static>> {
                         .unwrap()
                         .get_manager()
                         .to_user(&ctx.http)
-                        .await
-                        .unwrap()
+                        .await?
                         .tag();
                     command::create_response(
                         &ctx.http,
@@ -75,6 +78,7 @@ This instance of Loki is managed by {manager_tag}."
                         ),
                     )
                     .await;
+                    Ok(())
                 })
             }),
         ),
@@ -85,7 +89,7 @@ This instance of Loki is managed by {manager_tag}."
                 Box::pin(async {
                     let data = ctx.data.read().await;
                     let config = data.get::<Config>().unwrap();
-                    let manager = config.get_manager().to_user(&ctx.http).await.unwrap().tag();
+                    let manager = config.get_manager().to_user(&ctx.http).await?.tag();
                     let resp = match config.get_status_meaning() {
                         Some(meaning) => format!(
                             "**Status meaning:**
@@ -103,6 +107,7 @@ prod {manager} to update this."
                         ),
                     };
                     command::create_response(&ctx.http, command, &resp).await;
+                    Ok(())
                 })
             }),
         ),
