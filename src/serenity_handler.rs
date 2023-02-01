@@ -46,7 +46,18 @@ impl<'a> SerenityHandler<'a> {
         Command::set_global_application_commands(&ctx.http, |mut commands| {
             for cmd in self.commands.iter() {
                 commands = commands.create_application_command(|command| {
-                    command.name(cmd.name()).description(cmd.description())
+                    let mut command = command
+                        .name(cmd.name())
+                        .description(cmd.description())
+                        .dm_permission(
+                            *cmd.permissions() == crate::command::PermissionType::Universal,
+                        );
+                    if let crate::command::PermissionType::ServerPerms(permissions) =
+                        *cmd.permissions()
+                    {
+                        command = command.default_member_permissions(permissions);
+                    }
+                    command
                 })
             }
             commands

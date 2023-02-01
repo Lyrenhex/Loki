@@ -4,8 +4,11 @@ use std::{pin::Pin, sync::Arc};
 use serenity::{
     builder::CreateEmbed,
     http::Http,
-    model::prelude::interaction::{
-        application_command::ApplicationCommandInteraction, InteractionResponseType,
+    model::{
+        prelude::interaction::{
+            application_command::ApplicationCommandInteraction, InteractionResponseType,
+        },
+        Permissions,
     },
     prelude::{Context, HttpError},
     Error,
@@ -21,6 +24,17 @@ type ActionRoutine = Box<
         + Send,
 >;
 
+#[derive(Debug, PartialEq)]
+pub enum PermissionType {
+    /// Available for use by anyone (including in DMs).
+    /// Note that individual commands may, in certain circumstances,
+    /// check manually for specific criteria being met.
+    Universal,
+    /// Command requires specific permissions within the server.
+    /// This disables the command in DMs.
+    ServerPerms(Permissions),
+}
+
 /// Meta-information about a command.
 ///
 /// A vector of these objects is used to create the Discord-side
@@ -29,6 +43,7 @@ type ActionRoutine = Box<
 pub struct Command<'a> {
     name: &'a str,
     description: &'a str,
+    permissions: PermissionType,
     action: ActionRoutine,
 }
 
@@ -49,10 +64,19 @@ impl<'a> Command<'a> {
     ///     }),
     /// ),
     /// ```
-    pub fn new(name: &'a str, description: &'a str, action: ActionRoutine) -> Self {
+    pub fn new(
+        name: &'a str,
+        description: &'a str,
+        permissions: PermissionType,
+        action: ActionRoutine,
+    ) -> Self {
+        if description.len() > 100 {
+            panic!("Description should be <= 100 characters. (Command: {name})");
+        }
         Self {
             name,
             description,
+            permissions,
             action,
         }
     }
@@ -65,6 +89,11 @@ impl<'a> Command<'a> {
     /// Get the [Command]'s description.
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// Get the [PermissionType] for the [Command].
+    pub fn permissions(&self) -> &PermissionType {
+        &self.permissions
     }
 
     /// Run the [ActionRoutine] for this [Command].

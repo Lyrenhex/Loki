@@ -69,6 +69,11 @@ impl Config {
         self.status_meaning.clone()
     }
 
+    pub fn set_status_meaning(&mut self, s: Option<String>) {
+        self.status_meaning = s;
+        self.save();
+    }
+
     /// Construct a [ClientBuilder] from the supplied
     /// [GatewayIntents] and the configured Discord token.
     pub fn discord_client(&self, intents: GatewayIntents) -> ClientBuilder {

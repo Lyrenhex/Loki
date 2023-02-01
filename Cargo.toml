@@ -25,6 +25,7 @@ features = [
     "builder",
     "cache",
     "client",
+    "collector",
     "gateway",
     "http",
     "model",

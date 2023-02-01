@@ -12,7 +12,7 @@ server (alone).
 ## Planned features
 
 - [x] Command to explain my Discord status.
-    - [ ] Management command so that the bot owner can update the
+    - [x] Management command so that the bot owner can update the
           response to this.
 - [ ] Nickname auto-changer lottery
 - [ ] Responses to specific text in messages (but not actual commands)
@@ -27,3 +27,11 @@ and compares to the same list for GT7. Output in number of pages.
     - Winning meme announced when polls open for the next week.
 
 Eventually roll [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver)'s behaviour into Loki.
+
+## Credits
+
+This is a personal project. That said, there are code snippets either
+heavily inspired by (or modified versions of) code from
+[parrot](https://github.com/aquelemiguel/parrot).
+
+Many thanks to their contributors!
