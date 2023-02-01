@@ -188,7 +188,7 @@ prod {manager} to update this."
 
                             for input in inputs.iter() {
                                 if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
-                                    if it.custom_id == "new_status_meaning" {
+                                    if it.custom_id == "new_status_meaning" && it.value != "" {
                                         config.set_status_meaning(Some(it.value.clone()));
                                         updated = true;
                                     }
