@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use chrono::{Days, Utc};
 use log::{error, info};
+#[cfg(debug_assertions)]
+use serenity::model::prelude::GuildId;
 use serenity::{
     async_trait,
     model::prelude::{
         command::{Command, CommandOptionType},
         interaction::Interaction,
-        Activity, Guild, GuildId, Message, Ready,
+        Activity, Guild, Message, Ready,
     },
     prelude::{Context, EventHandler, Mentionable},
 };
