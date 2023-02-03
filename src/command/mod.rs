@@ -1,18 +1,25 @@
-use log::error;
-use std::{pin::Pin, sync::Arc};
+mod memes_channel_mgmt;
+mod set_status_meaning;
+mod util;
+
+pub use memes_channel_mgmt::memes_channel_mgmt;
+pub use set_status_meaning::set_status_meaning;
+pub use util::*;
+
+use std::pin::Pin;
 
 use serenity::{
-    builder::CreateEmbed,
-    http::Http,
     model::{
-        prelude::interaction::{
-            application_command::ApplicationCommandInteraction, InteractionResponseType,
+        prelude::{
+            command::CommandOptionType,
+            interaction::application_command::ApplicationCommandInteraction,
         },
         Permissions,
     },
-    prelude::{Context, HttpError},
-    Error,
+    prelude::Context,
 };
+
+use crate::Error;
 
 type ActionRoutine = Box<
     dyn (for<'b> Fn(
@@ -44,7 +51,9 @@ pub struct Command<'a> {
     name: &'a str,
     description: &'a str,
     permissions: PermissionType,
-    action: ActionRoutine,
+    options: Vec<Option<'a>>,
+    variants: Vec<Command<'a>>,
+    action: std::option::Option<ActionRoutine>,
 }
 
 impl<'a> Command<'a> {
@@ -68,7 +77,7 @@ impl<'a> Command<'a> {
         name: &'a str,
         description: &'a str,
         permissions: PermissionType,
-        action: ActionRoutine,
+        action: std::option::Option<ActionRoutine>,
     ) -> Self {
         if description.len() > 100 {
             panic!("Description should be <= 100 characters. (Command: {name})");
@@ -77,6 +86,8 @@ impl<'a> Command<'a> {
             name,
             description,
             permissions,
+            options: Vec::new(),
+            variants: Vec::new(),
             action,
         }
     }
@@ -96,53 +107,80 @@ impl<'a> Command<'a> {
         &self.permissions
     }
 
+    pub fn add_option(mut self, option: Option<'a>) -> Self {
+        self.options.push(option);
+        self
+    }
+
+    pub fn options(&self) -> &Vec<Option<'a>> {
+        &self.options
+    }
+
+    pub fn add_variant(mut self, variant: Command<'a>) -> Self {
+        self.variants.push(variant);
+        self
+    }
+
+    pub fn variants(&self) -> &Vec<Command<'a>> {
+        &self.variants
+    }
+
     /// Run the [ActionRoutine] for this [Command].
     pub async fn run(
         &self,
         ctx: &Context,
         command: &mut ApplicationCommandInteraction,
     ) -> crate::Result {
-        (self.action)(ctx, command).await
+        if let Some(action) = &self.action {
+            (action)(ctx, command).await
+        } else {
+            Err(Error::MissingActionRoutine)
+        }
     }
 }
 
-pub async fn create_response(
-    http: &Arc<Http>,
-    interaction: &mut ApplicationCommandInteraction,
-    message: &String,
-) {
-    let mut embed = CreateEmbed::default();
-    embed.description(message);
-    match interaction
-        .create_interaction_response(&http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| message.add_embed(embed.clone()))
+pub struct Option<'a> {
+    name: &'a str,
+    description: &'a str,
+    kind: CommandOptionType,
+    required: bool,
+}
+
+impl<'a> Option<'a> {
+    pub fn new(
+        name: &'a str,
+        description: &'a str,
+        kind: CommandOptionType,
+        required: bool,
+    ) -> Result<Self, crate::Error> {
+        if kind == CommandOptionType::SubCommand
+            || kind == CommandOptionType::SubCommandGroup
+            || kind == CommandOptionType::Unknown
+        {
+            panic!("Invalid command option type: {:?}", kind);
+        }
+
+        Ok(Self {
+            name,
+            description,
+            kind,
+            required,
         })
-        .await
-    {
-        Ok(()) => {}
-        Err(e) => match e {
-            Error::Http(ref e) => match &**e {
-                HttpError::UnsuccessfulRequest(req) => match req.error.code {
-                    40060 => {
-                        edit_embed_response(http, interaction, embed).await.unwrap();
-                    }
-                    _ => error!("{}", e),
-                },
-                _ => error!("{}", e),
-            },
-            _ => error!("{}", e),
-        },
     }
-}
 
-async fn edit_embed_response(
-    http: &Arc<Http>,
-    interaction: &mut ApplicationCommandInteraction,
-    embed: CreateEmbed,
-) -> Result<serenity::model::prelude::Message, serenity::Error> {
-    interaction
-        .edit_original_interaction_response(&http, |message| message.content(" ").add_embed(embed))
-        .await
+    pub fn name(&self) -> &'a str {
+        &self.name
+    }
+
+    pub fn description(&self) -> &'a str {
+        &self.description
+    }
+
+    pub fn kind(&self) -> CommandOptionType {
+        self.kind
+    }
+
+    pub fn required(&self) -> bool {
+        self.required
+    }
 }

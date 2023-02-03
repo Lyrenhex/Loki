@@ -3,13 +3,17 @@ mod config;
 mod error;
 mod serenity_handler;
 
+// use std::time::Duration;
+
 use log::error;
-use serenity::{futures::StreamExt, prelude::GatewayIntents};
+use serenity::{prelude::GatewayIntents, utils::Colour};
 
 use command::Command;
 use config::Config;
 pub use error::Error;
 use serenity_handler::SerenityHandler;
+
+const COLOUR: Colour = Colour::new(0x0099ff);
 
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
@@ -62,7 +66,7 @@ fn generate_commands() -> Vec<Command<'static>> {
             "about",
             "Provides information about Loki.",
             command::PermissionType::Universal,
-            Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command| {
                 Box::pin(async {
                     let manager_tag = ctx
                         .data
@@ -79,7 +83,7 @@ fn generate_commands() -> Vec<Command<'static>> {
                         command,
                         &format!(
                             "Loki is a trickster ~~god~~ bot.
-Version {VERSION}; [source code]({GITHUB_URL}).
+Version [{VERSION}]({GITHUB_URL}/releases/tag/v{VERSION}); [source code]({GITHUB_URL}).
 
 This instance of Loki is managed by {manager_tag}.
 
@@ -90,13 +94,13 @@ Current features:
                     .await;
                     Ok(())
                 })
-            }),
+            })),
         ),
         Command::new(
             "status_meaning",
             "Retrieves the meaning of the bot managers's current Discord status.",
             command::PermissionType::Universal,
-            Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command| {
                 Box::pin(async {
                     let data = ctx.data.read().await;
                     let config = data.get::<Config>().unwrap();
@@ -119,99 +123,9 @@ prod {manager} to update this."
                     command::create_response(&ctx.http, command, &resp).await;
                     Ok(())
                 })
-            }),
+            })),
         ),
-        Command::new(
-            "set_status_meaning",
-            "Manager-only: sets the meaning of the manager's Discord status.",
-            command::PermissionType::Universal,
-            Box::new(move |ctx, command| {
-                Box::pin(async move {
-                    let data = ctx.data.read().await;
-                    let config = data.get::<Config>().unwrap();
-                    let manager = config.get_manager().to_user(&ctx.http).await?;
-                    if command.user != manager {
-                        let resp = format!("**Unauthorised:** You're not {}!", manager.tag());
-                        command::create_response(&ctx.http, command, &resp).await;
-                        return Ok(());
-                    }
-
-                    // TODO: refactor everything after this - maybe a
-                    // custom struct which handles all of this for us?
-                    // eg, sets IDs and handles returning values etc.
-                    // then, we can just call it, await a response,
-                    // and set our values...
-                    // for now though, credit to https://github.com/aquelemiguel/parrot/blob/main/src/commands/manage_sources.rs
-                    // for this design.
-                    let mut meaning = serenity::builder::CreateInputText::default();
-                    meaning
-                        .label("Discord status meaning")
-                        .custom_id("new_status_meaning")
-                        .style(serenity::model::prelude::component::InputTextStyle::Paragraph)
-                        .placeholder("Some meaning here, or leave blank to unset.")
-                        .required(false);
-                    if let Some(old_meaning) = config.get_status_meaning() {
-                        meaning.value(old_meaning);
-                    }
-                    drop(data);
-
-                    let mut components = serenity::builder::CreateComponents::default();
-                    components.create_action_row(|r| r.add_input_text(meaning));
-
-                    command
-                        .create_interaction_response(&ctx.http, |r| {
-                            r.kind(serenity::model::application::interaction::InteractionResponseType::Modal);
-                            r.interaction_response_data(|d| {
-                                d.title("Set Discord status meaning").custom_id("set_status_meaning").set_components(components)
-                            })
-                        })
-                        .await?;
-
-                    // collect the submitted data
-                    let collector = serenity::collector::ModalInteractionCollectorBuilder::new(ctx)
-                        .filter(|int| int.data.custom_id == "set_status_meaning")
-                        .build();
-
-                    collector
-                        .then(|int| async move {
-                            let mut data = ctx.data.write().await;
-                            let config = data.get_mut::<Config>().unwrap();
-
-                            let inputs: Vec<_> = int
-                                .data
-                                .components
-                                .iter()
-                                .flat_map(|r| r.components.iter())
-                                .collect();
-
-                            let mut updated = false;
-
-                            for input in inputs.iter() {
-                                if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
-                                    if it.custom_id == "new_status_meaning" && it.value != "" {
-                                        config.set_status_meaning(Some(it.value.clone()));
-                                        updated = true;
-                                    }
-                                }
-                            }
-
-                            if !updated {
-                                config.set_status_meaning(None);
-                            }
-
-                            // it's now safe to close the modal, so send a response to it
-                            int.create_interaction_response(&ctx.http, |r| {
-                                r.kind(serenity::model::prelude::interaction::InteractionResponseType::DeferredUpdateMessage)
-                            })
-                            .await
-                            .ok();
-                        })
-                        .collect::<Vec<_>>()
-                        .await;
-
-                    Ok(())
-                })
-            }),
-        ),
+        command::set_status_meaning(),
+        command::memes_channel_mgmt(),
     ]
 }

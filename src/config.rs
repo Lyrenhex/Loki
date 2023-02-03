@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::{env, fs};
 
+use chrono::{Days, Utc};
 use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{GuildId, UserId};
+use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMapKey};
 
 #[derive(Deserialize, Serialize)]
@@ -13,21 +14,10 @@ pub struct Config {
     manager: UserId,
     status_meaning: Option<String>,
     tokens: Tokens,
-    guilds: Option<HashMap<GuildId, Guild>>,
-}
-
-#[derive(Deserialize, Serialize)]
-struct Tokens {
-    discord: String,
-}
-
-#[derive(Deserialize, Serialize)]
-struct Guild {
-    trigger_map: HashMap<String, String>,
-}
-
-impl TypeMapKey for Config {
-    type Value = Config;
+    /// Maps a [String]-encoded [GuildId] to its respective [Guild].
+    /// Using a [String] here as [toml] has issues deserialising this to
+    /// anything else, for some reason?
+    guilds: Option<HashMap<String, Guild>>,
 }
 
 impl Config {
@@ -48,7 +38,7 @@ impl Config {
         config
     }
 
-    fn save(&self) {
+    pub fn save(&self) {
         let config_path = env::var("LOKI_CONFIG_PATH").unwrap_or("config.toml".to_string());
 
         match toml::to_string_pretty(self) {
@@ -65,6 +55,28 @@ impl Config {
         self.manager
     }
 
+    pub fn guild(&self, id: &GuildId) -> Option<&Guild> {
+        if let Some(guilds) = &self.guilds {
+            if !guilds.contains_key(&id.to_string()) {
+                return None;
+            }
+            return Some(guilds.get(&id.to_string()).unwrap());
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn guild_mut(&mut self, id: &GuildId) -> &mut Guild {
+        if let Some(guilds) = &mut self.guilds {
+            if !guilds.contains_key(&id.to_string()) {
+                guilds.insert(id.to_string(), Guild::default());
+            }
+            return guilds.get_mut(&id.to_string()).unwrap();
+        } else {
+            unreachable!()
+        }
+    }
+
     pub fn get_status_meaning(&self) -> Option<String> {
         self.status_meaning.clone()
     }
@@ -78,5 +90,84 @@ impl Config {
     /// [GatewayIntents] and the configured Discord token.
     pub fn discord_client(&self, intents: GatewayIntents) -> ClientBuilder {
         Client::builder(&self.tokens.discord, intents)
+    }
+}
+
+impl TypeMapKey for Config {
+    type Value = Config;
+}
+
+#[derive(Deserialize, Serialize)]
+struct Tokens {
+    discord: String,
+}
+
+#[derive(Deserialize, Serialize, Default)]
+pub struct Guild {
+    trigger_map: Option<HashMap<String, String>>,
+    memes: Option<Memes>,
+}
+
+impl Guild {
+    pub fn set_memes_channel(&mut self, channel: Option<ChannelId>) {
+        if let Some(channel) = channel {
+            self.memes = Some(Memes::new(channel));
+        } else {
+            self.memes = None;
+        }
+    }
+
+    pub fn memes(&self) -> Option<&Memes> {
+        if let Some(memes) = &self.memes {
+            Some(memes)
+        } else {
+            None
+        }
+    }
+
+    pub fn memes_mut(&mut self) -> Option<&mut Memes> {
+        if let Some(memes) = &mut self.memes {
+            Some(memes)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Memes {
+    channel: ChannelId,
+    last_reset: chrono::DateTime<Utc>,
+    memes_list: Vec<MessageId>,
+}
+
+impl Memes {
+    fn new(channel: ChannelId) -> Self {
+        Self {
+            channel,
+            last_reset: Utc::now(),
+            memes_list: Vec::new(),
+        }
+    }
+
+    pub fn list(&self) -> &Vec<MessageId> {
+        &self.memes_list
+    }
+
+    pub fn add(&mut self, message: MessageId) {
+        self.memes_list.push(message);
+    }
+
+    pub fn next_reset(&self) -> chrono::DateTime<Utc> {
+        self.last_reset.checked_add_days(Days::new(7)).unwrap()
+    }
+
+    pub fn reset(&mut self) {
+        self.last_reset = Utc::now();
+        self.memes_list.clear();
+    }
+
+    pub fn channel(&self) -> ChannelId {
+        self.channel
     }
 }
