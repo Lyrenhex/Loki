@@ -15,6 +15,7 @@ use serenity::{
 use crate::{config::Config, COLOUR};
 
 // guild to use for testing purposes.
+#[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
 
 /// Core implementation logic for [serenity] events.
@@ -283,7 +284,8 @@ impl<'a> SerenityHandler<'a> {
                 }
             };
         }
-        if cfg!(debug_assertions) {
+        #[cfg(debug_assertions)]
+        {
             let guild = GuildId(
                 DEBUG_GUILD_ID.parse::<u64>().expect(
                     ("Couldn't parse 'LOKI_DEBUG_GUILD_ID' as a u64: ".to_owned() + DEBUG_GUILD_ID)
@@ -296,9 +298,13 @@ impl<'a> SerenityHandler<'a> {
             guild
                 .set_application_commands(&ctx.http, command_constructor!())
                 .await
-        } else {
-            Command::set_global_application_commands(&ctx.http, command_constructor!()).await
+                .expect("Failed to create command")
         }
-        .expect("Failed to create command")
+        #[cfg(not(debug_assertions))]
+        {
+            Command::set_global_application_commands(&ctx.http, command_constructor!())
+                .await
+                .expect("Failed to create command")
+        }
     }
 }
