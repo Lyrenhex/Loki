@@ -20,7 +20,8 @@ const COLOUR: Colour = Colour::new(0x0099ff);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GITHUB_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const FEATURES: &str =
-    "- `/status_meaning` to determine the meaning of the bot manager's Discord status.";
+    "- `/status_meaning` to determine the meaning of the bot manager's Discord status.
+    - `/memes` (`Manage Channels` permissions required) to control the meme voting system.";
 
 pub type Result = core::result::Result<(), Error>;
 

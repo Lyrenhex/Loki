@@ -15,7 +15,6 @@ use serenity::{
 use crate::{config::Config, COLOUR};
 
 // guild to use for testing purposes.
-#[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
 
 /// Core implementation logic for [serenity] events.
