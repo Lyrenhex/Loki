@@ -1,9 +1,22 @@
+use std::time::Duration;
+
+use chrono::{Days, Utc};
 use log::{error, info};
 use serenity::{
     async_trait,
-    model::prelude::{command::Command, interaction::Interaction, Activity, Ready},
+    model::prelude::{
+        command::{Command, CommandOptionType},
+        interaction::Interaction,
+        Activity, Guild, GuildId, Ready,
+    },
     prelude::{Context, EventHandler},
 };
+
+use crate::config::Config;
+
+// guild to use for testing purposes.
+#[cfg(debug_assertions)]
+const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
 
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
@@ -21,13 +34,111 @@ impl EventHandler for SerenityHandler<'_> {
         self.create_commands(&ctx).await;
     }
 
+    async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
+        tokio::spawn(async move {
+            loop {
+                let data = ctx.data.read().await;
+                let config = data.get::<Config>().unwrap();
+                let guild = config.guild(&g.id);
+                if let Some(guild) = guild {
+                    if let Some(reset_time) = guild.get_memes_reset_time() {
+                        println!("reset in: {}", reset_time);
+                        drop(data);
+                        let now = Utc::now();
+                        let time_until_ping = reset_time
+                            .checked_sub_days(Days::new(2))
+                            .unwrap()
+                            .signed_duration_since(now);
+                        if time_until_ping.num_seconds() > 0 {
+                            println!("sleeping for {}s", time_until_ping.num_seconds());
+                            tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
+                            let data = ctx.data.read().await;
+                            let config = data.get::<Config>().unwrap();
+                            let guild = config.guild(&g.id).unwrap();
+                            let channel = guild
+                                .get_memes_channel()
+                                .unwrap()
+                                .to_channel(&ctx.http)
+                                .await
+                                .unwrap()
+                                .guild()
+                                .unwrap();
+                            drop(data);
+                            channel
+                                .send_message(&ctx.http, |m| {
+                                    m.add_embed(|e| {
+                                        e.description(
+                                            "**No memes?**
+Two days left! Perhaps time to post some?",
+                                        )
+                                    })
+                                })
+                                .await
+                                .unwrap();
+                        }
+                        let now = Utc::now();
+                        let time_until_reset = reset_time.signed_duration_since(now);
+                        if time_until_reset.num_seconds() > 0 {
+                            println!("sleeping for {}s", time_until_reset.num_seconds());
+                            tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
+                        }
+                        let mut data = ctx.data.write().await;
+                        let config = data.get_mut::<Config>().unwrap();
+                        let guild = config.guild_mut(&g.id);
+                        let channel = guild
+                            .get_memes_channel()
+                            .unwrap()
+                            .to_channel(&ctx.http)
+                            .await
+                            .unwrap()
+                            .guild()
+                            .unwrap();
+                        let victor = guild.memes_reset();
+                        if let Some(_victor) = victor {
+                            channel
+                                .send_message(&ctx.http, |m| {
+                                    m.add_embed(|e| e.description("TODO: congratulations message"))
+                                })
+                                .await
+                                .unwrap();
+                        } else {
+                            info!("No winner this week.");
+                        }
+                        config.save();
+                        drop(data);
+                    } else {
+                        drop(data);
+                    }
+                } else {
+                    drop(data);
+                }
+                // let up for a while so we don't hog the mutex...
+                tokio::time::sleep(Duration::new(3600, 0)).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(mut command) = interaction {
             for cmd in self.commands.iter() {
                 if cmd.name() == command.data.name {
+                    let mut cmd = cmd;
+                    if command.data.options.len() > 0
+                        && command.data.options[0].kind == CommandOptionType::SubCommand
+                    {
+                        for subcmd in cmd.variants() {
+                            if subcmd.name() == command.data.options[0].name {
+                                cmd = subcmd;
+                                break;
+                            }
+                        }
+                    };
                     if let Err(e) = cmd.run(&ctx, &mut command).await {
                         error!("Error running '{}': {e:?}", cmd.name());
-                        todo!("error handling");
+                        crate::command::create_response(&ctx.http, &mut command, &format!("{e}"))
+                            .await;
                     }
                     break;
                 }
@@ -43,26 +154,73 @@ impl<'a> SerenityHandler<'a> {
     }
 
     async fn create_commands(&self, ctx: &Context) -> Vec<Command> {
-        Command::set_global_application_commands(&ctx.http, |mut commands| {
-            for cmd in self.commands.iter() {
-                commands = commands.create_application_command(|command| {
-                    let mut command = command
-                        .name(cmd.name())
-                        .description(cmd.description())
-                        .dm_permission(
-                            *cmd.permissions() == crate::command::PermissionType::Universal,
-                        );
-                    if let crate::command::PermissionType::ServerPerms(permissions) =
-                        *cmd.permissions()
-                    {
-                        command = command.default_member_permissions(permissions);
+        macro_rules! command_constructor {
+            () => {
+                |mut commands| {
+                    for cmd in self.commands.iter() {
+                        commands = commands.create_application_command(|command| {
+                            let mut command = command
+                                .name(cmd.name())
+                                .description(cmd.description())
+                                .dm_permission(
+                                    *cmd.permissions() == crate::command::PermissionType::Universal,
+                                );
+                            if let crate::command::PermissionType::ServerPerms(permissions) =
+                                *cmd.permissions()
+                            {
+                                command = command.default_member_permissions(permissions);
+                            }
+                            for variant in cmd.variants() {
+                                command = command.create_option(|subcmd| {
+                                    let mut subcmd = subcmd
+                                        .name(variant.name())
+                                        .description(variant.description())
+                                        .kind(CommandOptionType::SubCommand)
+                                        .required(false);
+                                    for opt in variant.options() {
+                                        subcmd = subcmd.create_sub_option(|option| {
+                                            option
+                                                .name(opt.name())
+                                                .description(opt.description())
+                                                .kind(opt.kind())
+                                                .required(opt.required())
+                                        })
+                                    }
+                                    subcmd
+                                })
+                            }
+                            for opt in cmd.options() {
+                                command = command.create_option(|option| {
+                                    option
+                                        .name(opt.name())
+                                        .description(opt.description())
+                                        .kind(opt.kind())
+                                        .required(opt.required())
+                                })
+                            }
+                            command
+                        })
                     }
-                    command
-                })
-            }
-            commands
-        })
-        .await
+                    commands
+                }
+            };
+        }
+        if cfg!(debug_assertions) {
+            let guild = GuildId(
+                DEBUG_GUILD_ID.parse::<u64>().expect(
+                    ("Couldn't parse 'LOKI_DEBUG_GUILD_ID' as a u64: ".to_owned() + DEBUG_GUILD_ID)
+                        .as_str(),
+                ),
+            )
+            .to_partial_guild(&ctx.http)
+            .await
+            .unwrap();
+            guild
+                .set_application_commands(&ctx.http, command_constructor!())
+                .await
+        } else {
+            Command::set_global_application_commands(&ctx.http, command_constructor!()).await
+        }
         .expect("Failed to create command")
     }
 }

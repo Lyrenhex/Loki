@@ -25,8 +25,51 @@ and compares to the same list for GT7. Output in number of pages.
       Saturday.
         - This is also when the week resets.
     - Winning meme announced when polls open for the next week.
+- [ ] Reminders.
+  - Probably generic reminders, set by server admins.
 
 Eventually roll [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver)'s behaviour into Loki.
+
+## Getting started
+
+### Configuration
+
+Configuration takes place in `config.toml`, which by default should be in the same place as where the
+bot is running; however, this can be changed by specifying the path in the `LOKI_CONFIG_PATH` environment
+variable.
+
+A minimal `config.toml` looks like this (note that the bot will write to this file, so any comments will
+likely be lost):
+
+```toml
+manager = "123456789012345678" # your Discord User ID.
+
+[tokens]
+discord = "some alphanumeric characters" # your Discord bot's token, from the Discord developer dashboard.
+```
+
+IDs, such as your User ID, should be obtained by using the "Copy ID" functionality in Discord
+Developer mode.
+
+**WARNING:** This bot is a personal project, _and is currently pre-release per SemVer_; the configuration
+structure **is subject to change**, and configuration structures **will not** migrate cleanly over between
+versions. You may lose data, and may find it easier to nuke your data anyway when the config structure
+changes. Again, **this is not production-ready software** and you have been warned: there's no warranty!
+
+### Running the bot
+
+`cargo run --release`
+
+**Note:** In debug mode, the bot is desiged to use a testing server.
+To compile the bot in debug mode, you will need to set the `LOKI_DEBUG_GUILD_ID`
+environment variable to the Guild ID of _your_ server.
+This can be found in the Discord application by enabling Developer mode, right
+clicking your server and clicking "Copy ID". Store that in the environment variable,
+reload your shell, et voíla - you're done!
+
+> For the curious, this is because in debug mode we switch to guild-specific
+> commands, which update instantly. In release mode, commands are global, which
+> bears an up-to-1-hour propagation delay when command structures are updated.
 
 ## Credits
 
