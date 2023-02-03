@@ -18,13 +18,13 @@ server (alone).
 - [ ] Responses to specific text in messages (but not actual commands)
 - [ ] Periodic checks for how many known issues are present in FH5
 and compares to the same list for GT7. Output in number of pages.
-- [ ] "Meme of the week"
-    - Watches a memes channel, keeping a record of each meme posted.
-    - Pings a reminder on Friday if no memes are present that week.
-    - Opens votes (some kind of poll) for meme of the week on
-      Saturday.
-        - This is also when the week resets.
-    - Winning meme announced when polls open for the next week.
+- [x] "Meme of the week"
+    - Once started, it watches the memes channel.
+    - After 5 days, if no memes have been posted, it posts a
+      reminder.
+    - After a further two days, it tallies up all reactions to the
+      posts. The post with the greatest number of reactions wins,
+      and the system resets for the next week.
 - [ ] Reminders.
   - Probably generic reminders, set by server admins.
 
