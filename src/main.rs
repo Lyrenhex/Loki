@@ -109,13 +109,13 @@ Current features:
 {meaning}
 
 _If this meaning seems out-of-date, yell at {manager} to update \
-    this!_"
+this!_"
                         ),
                         None => format!(
                             "**No known meaning.**
 
 Assuming there _is_, in fact, a status message, you likely need to \
-    prod {manager} to update this."
+prod {manager} to update this."
                         ),
                     };
                     command::create_response(&ctx.http, command, &resp).await;
