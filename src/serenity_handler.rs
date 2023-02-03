@@ -50,7 +50,10 @@ impl EventHandler for SerenityHandler<'_> {
                             .unwrap()
                             .signed_duration_since(now);
                         if time_until_ping.num_seconds() > 0 {
-                            println!("sleeping for {}s", time_until_ping.num_seconds());
+                            info!(
+                                "Sleeping for {}s until it's time to ping",
+                                time_until_ping.num_seconds()
+                            );
                             tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
                             let data = ctx.data.read().await;
                             let config = data.get::<Config>().unwrap();
@@ -79,7 +82,10 @@ Two days left! Perhaps time to post some?",
                         let now = Utc::now();
                         let time_until_reset = reset_time.signed_duration_since(now);
                         if time_until_reset.num_seconds() > 0 {
-                            println!("sleeping for {}s", time_until_reset.num_seconds());
+                            info!(
+                                "Sleeping for {}s until it's time to reset",
+                                time_until_reset.num_seconds()
+                            );
                             tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
                         }
                         let mut data = ctx.data.write().await;
