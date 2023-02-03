@@ -16,7 +16,12 @@ impl From<serenity::Error> for Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidChannel => write!(f, "**Error: Invalid channel**"),
+            Self::InvalidChannel => write!(
+                f,
+                "**Error: Invalid channel**
+Are you sure it's the correct type of channel, and that I have \
+access to it?"
+            ),
             Self::MissingActionRoutine => write!(
                 f,
                 "**Error: Missing Action Routine**

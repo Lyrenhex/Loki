@@ -5,7 +5,7 @@ use serenity::model::{
     Permissions,
 };
 
-use crate::config::Config;
+use crate::{config::Config, COLOUR};
 
 use super::{create_response, Command, PermissionType};
 
@@ -39,7 +39,7 @@ pub fn memes_channel_mgmt() -> Command<'static> {
                     let config = data.get_mut::<Config>().unwrap();
                     let guild_config = config.guild_mut(&command.guild_id.unwrap());
                     guild_config.set_memes_channel(Some(channel_id));
-                    let reset_time = guild_config.get_memes_reset_time().unwrap();
+                    let reset_time = guild_config.memes().unwrap().next_reset();
                     config.save();
                     drop(data);
                     let resp = format!("Memes channel set to {}.", channel);
@@ -52,6 +52,7 @@ Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
                                     reset_time, // TODO: format time
                                 ))
+                                .colour(COLOUR)
                             })
                         })
                         .await?;
@@ -78,9 +79,12 @@ The post with the most total reactions by {} wins!",
             Box::pin(async {
                 let mut data = ctx.data.write().await;
                 let config = data.get_mut::<Config>().unwrap();
-                let channel = config
-                    .guild_mut(&command.guild_id.unwrap())
-                    .get_memes_channel();
+                let channel =
+                    if let Some(memes) = config.guild_mut(&command.guild_id.unwrap()).memes() {
+                        Some(memes.channel())
+                    } else {
+                        None
+                    };
                 config
                     .guild_mut(&command.guild_id.unwrap())
                     .set_memes_channel(None);
@@ -97,6 +101,7 @@ The post with the most total reactions by {} wins!",
                                         "**Halt your memes!**
 I won't see them anymore. :(",
                                     )
+                                    .colour(COLOUR)
                                 })
                             })
                             .await?;

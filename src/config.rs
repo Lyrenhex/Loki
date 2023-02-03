@@ -6,7 +6,7 @@ use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{ChannelId, GuildId, Message, MessageId, UserId};
+use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMapKey};
 
 #[derive(Deserialize, Serialize)]
@@ -117,29 +117,17 @@ impl Guild {
         }
     }
 
-    pub fn get_memes_channel(&self) -> Option<ChannelId> {
+    pub fn memes(&self) -> Option<&Memes> {
         if let Some(memes) = &self.memes {
-            Some(memes.channel)
+            Some(memes)
         } else {
             None
         }
     }
 
-    pub fn get_memes_reset_time(&self) -> Option<chrono::DateTime<Utc>> {
-        if let Some(memes) = &self.memes {
-            memes.last_reset.checked_add_days(Days::new(7))
-        } else {
-            None
-        }
-    }
-
-    pub fn memes_reset(&mut self) -> Option<Message> {
+    pub fn memes_mut(&mut self) -> Option<&mut Memes> {
         if let Some(memes) = &mut self.memes {
-            // todo: calculate winner...
-            memes.last_reset = Utc::now();
-            memes.memes_list.clear();
-            // todo: return winner
-            None
+            Some(memes)
         } else {
             None
         }
@@ -147,7 +135,7 @@ impl Guild {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-struct Memes {
+pub struct Memes {
     channel: ChannelId,
     last_reset: chrono::DateTime<Utc>,
     memes_list: Vec<MessageId>,
@@ -160,5 +148,26 @@ impl Memes {
             last_reset: Utc::now(),
             memes_list: Vec::new(),
         }
+    }
+
+    pub fn list(&self) -> &Vec<MessageId> {
+        &self.memes_list
+    }
+
+    pub fn add(&mut self, message: MessageId) {
+        self.memes_list.push(message);
+    }
+
+    pub fn next_reset(&self) -> chrono::DateTime<Utc> {
+        self.last_reset.checked_add_days(Days::new(7)).unwrap()
+    }
+
+    pub fn reset(&mut self) {
+        self.last_reset = Utc::now();
+        self.memes_list.clear();
+    }
+
+    pub fn channel(&self) -> ChannelId {
+        self.channel
     }
 }

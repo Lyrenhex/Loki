@@ -11,6 +11,8 @@ use serenity::{
     Error,
 };
 
+use crate::COLOUR;
+
 /// Create a text-based embed response with the given `message`.
 pub async fn create_response(
     http: &Arc<Http>,
@@ -19,6 +21,7 @@ pub async fn create_response(
 ) {
     let mut embed = CreateEmbed::default();
     embed.description(message);
+    embed.colour(COLOUR);
     match interaction
         .create_interaction_response(&http, |response| {
             response

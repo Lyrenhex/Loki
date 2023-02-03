@@ -7,12 +7,12 @@ use serenity::{
     model::prelude::{
         command::{Command, CommandOptionType},
         interaction::Interaction,
-        Activity, Guild, GuildId, Ready,
+        Activity, Guild, GuildId, Message, Ready,
     },
-    prelude::{Context, EventHandler},
+    prelude::{Context, EventHandler, Mentionable},
 };
 
-use crate::config::Config;
+use crate::{config::Config, COLOUR};
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
@@ -41,8 +41,9 @@ impl EventHandler for SerenityHandler<'_> {
                 let config = data.get::<Config>().unwrap();
                 let guild = config.guild(&g.id);
                 if let Some(guild) = guild {
-                    if let Some(reset_time) = guild.get_memes_reset_time() {
-                        println!("reset in: {}", reset_time);
+                    if let Some(memes) = guild.memes() {
+                        let reset_time = memes.next_reset();
+                        info!("Next reset: {}", reset_time);
                         drop(data);
                         let now = Utc::now();
                         let time_until_ping = reset_time
@@ -57,27 +58,37 @@ impl EventHandler for SerenityHandler<'_> {
                             tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
                             let data = ctx.data.read().await;
                             let config = data.get::<Config>().unwrap();
-                            let guild = config.guild(&g.id).unwrap();
-                            let channel = guild
-                                .get_memes_channel()
-                                .unwrap()
-                                .to_channel(&ctx.http)
-                                .await
-                                .unwrap()
-                                .guild()
-                                .unwrap();
-                            drop(data);
-                            channel
-                                .send_message(&ctx.http, |m| {
-                                    m.add_embed(|e| {
-                                        e.description(
-                                            "**No memes?**
+                            let guild = config.guild(&g.id);
+                            if let Some(guild) = guild {
+                                if let Some(memes) = guild.memes() {
+                                    let channel = memes
+                                        .channel()
+                                        .to_channel(&ctx.http)
+                                        .await
+                                        .unwrap()
+                                        .guild()
+                                        .unwrap();
+                                    let no_memes = memes.list().len() == 0;
+                                    if no_memes {
+                                        channel
+                                            .send_message(&ctx.http, |m| {
+                                                m.add_embed(|e| {
+                                                    e.description(
+                                                "**No memes?**
 Two days left! Perhaps time to post some?",
-                                        )
-                                    })
-                                })
-                                .await
-                                .unwrap();
+                                            )
+                                            .image(
+                                                "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif",
+                                            )
+                                            .colour(COLOUR)
+                                                })
+                                            })
+                                            .await
+                                            .unwrap();
+                                    }
+                                }
+                            }
+                            drop(data);
                         }
                         let now = Utc::now();
                         let time_until_reset = reset_time.signed_duration_since(now);
@@ -91,26 +102,67 @@ Two days left! Perhaps time to post some?",
                         let mut data = ctx.data.write().await;
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&g.id);
-                        let channel = guild
-                            .get_memes_channel()
-                            .unwrap()
-                            .to_channel(&ctx.http)
-                            .await
-                            .unwrap()
-                            .guild()
-                            .unwrap();
-                        let victor = guild.memes_reset();
-                        if let Some(_victor) = victor {
-                            channel
-                                .send_message(&ctx.http, |m| {
-                                    m.add_embed(|e| e.description("TODO: congratulations message"))
-                                })
+                        if let Some(memes) = guild.memes_mut() {
+                            let channel = memes
+                                .channel()
+                                .to_channel(&ctx.http)
                                 .await
+                                .unwrap()
+                                .guild()
                                 .unwrap();
-                        } else {
-                            info!("No winner this week.");
+                            let mut most_reactions = 0;
+                            let mut victor: Option<Message> = None;
+                            for meme in memes.list() {
+                                if let Ok(meme) = channel.message(&ctx.http, meme).await {
+                                    let total_reactions: u64 =
+                                        meme.reactions.iter().map(|m| m.count).sum();
+                                    if total_reactions > most_reactions {
+                                        most_reactions = total_reactions;
+                                        victor = Some(meme);
+                                    }
+                                }
+                            }
+
+                            memes.reset();
+                            if let Some(victor) = victor {
+                                channel
+                                    .send_message(&ctx.http, |m| {
+                                        m.add_embed(|e| {
+                                            e.description(format!(
+                                                "**Voting results**
+Congratulations {} for winning this week's meme contest, with \
+their entry [here]({})!
+
+It won with a resounding {most_reactions} votes.
+
+I've reset the entries, so post your best memes and perhaps next \
+week you'll win? 😉",
+                                                victor.author.mention(),
+                                                victor.link()
+                                            ))
+                                            .colour(COLOUR)
+                                        })
+                                    })
+                                    .await
+                                    .unwrap();
+                            } else {
+                                channel
+                                    .send_message(&ctx.http, |m| {
+                                        m.add_embed(|e| {
+                                            e.description(format!(
+                                                "**No votes**
+There weren't any votes (reactions), so there's no winner. Sadge.
+
+I've reset the entries, so can you, like, _do something_ this week?",
+                                            ))
+                                            .colour(COLOUR)
+                                        })
+                                    })
+                                    .await
+                                    .unwrap();
+                            }
+                            config.save();
                         }
-                        config.save();
                         drop(data);
                     } else {
                         drop(data);
@@ -119,7 +171,15 @@ Two days left! Perhaps time to post some?",
                     drop(data);
                 }
                 // let up for a while so we don't hog the mutex...
-                tokio::time::sleep(Duration::new(3600, 0)).await;
+                // sleep for a day, which also gives a nice window to change
+                // the reset time if we're sleeping after a proper reset.
+                // if the memes channel is re-set during this day, then the
+                // system will properly start using the new artifical time.
+                // (eg, initially set up system at 10pm -> all resets occur
+                // at 10pm. wait until reset, and if you then re-set the memes
+                // channel at 7am the next morning, resets will start occuring
+                // at 7am.)
+                tokio::time::sleep(Duration::new(86_400, 0)).await;
             }
         })
         .await
@@ -150,6 +210,19 @@ Two days left! Perhaps time to post some?",
                 }
             }
         };
+    }
+
+    async fn message(&self, ctx: Context, message: Message) {
+        let mut data = ctx.data.write().await;
+        let config = data.get_mut::<Config>().unwrap();
+        let guild = config.guild_mut(&message.guild_id.unwrap());
+        if let Some(memes) = guild.memes_mut() {
+            if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
+                memes.add(message.id);
+                config.save()
+            }
+        }
+        drop(data);
     }
 }
 

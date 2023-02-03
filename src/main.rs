@@ -6,12 +6,14 @@ mod serenity_handler;
 // use std::time::Duration;
 
 use log::error;
-use serenity::prelude::GatewayIntents;
+use serenity::{prelude::GatewayIntents, utils::Colour};
 
 use command::Command;
 use config::Config;
 pub use error::Error;
 use serenity_handler::SerenityHandler;
+
+const COLOUR: Colour = Colour::new(0x0099ff);
 
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
