@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::{env, fs};
+use tokio::sync::RwLockReadGuard;
 
 use chrono::{Days, Utc};
 use log::error;
@@ -7,7 +8,28 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
 use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
-use serenity::prelude::{GatewayIntents, TypeMapKey};
+use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
+
+/// Abstraction to try get a handle to a [GuildId]'s [Guild] entry
+/// from the config, based on a [RwLockReadGuard<TypeMap>] obtained
+/// from a [serenity::prelude::Context].
+pub fn get_guild<'a>(data: &'a RwLockReadGuard<TypeMap>, guild: &GuildId) -> Option<&'a Guild> {
+    let config = data.get::<Config>().unwrap();
+    config.guild(guild)
+}
+
+/// Abstraction to try get a handle to a [GuildId]'s [Memes] entry
+/// from the config, based on a [RwLockReadGuard<TypeMap>] obtained
+/// from a [serenity::prelude::Context].
+///
+/// In particular, this function helps to avoid a double-nested `if`.
+pub fn get_memes<'a>(data: &'a RwLockReadGuard<TypeMap>, guild: &GuildId) -> Option<&'a Memes> {
+    if let Some(guild) = get_guild(data, guild) {
+        guild.memes()
+    } else {
+        None
+    }
+}
 
 #[derive(Deserialize, Serialize)]
 pub struct Config {

@@ -14,7 +14,7 @@ use serenity::{
     prelude::{Context, EventHandler, Mentionable},
 };
 
-use crate::config::Config;
+use crate::config::{get_memes, Config};
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
@@ -23,6 +23,48 @@ const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
     commands: Vec<crate::command::Command<'a>>,
+}
+
+impl SerenityHandler<'_> {
+    /// Catch up on any messages that were missed while the bot was
+    /// offline.
+    async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
+        let mut finished = true;
+        let mut data = ctx.data.write().await;
+        let config = data.get_mut::<Config>().unwrap();
+        let guild = config.guild_mut(&g.id);
+        if let Some(memes) = guild.memes_mut() {
+            // catch up on any messages that were missed while we were offline.
+            if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
+                let channel = channel.guild().unwrap();
+                loop {
+                    if let Some(last_message) = memes.list().last() {
+                        match channel
+                            .messages(&ctx.http, |retriever| {
+                                retriever.after(last_message).limit(100)
+                            })
+                            .await
+                        {
+                            Ok(messages) => {
+                                messages
+                                    .iter()
+                                    .filter(|m| !m.is_own(&ctx.cache))
+                                    .for_each(|m| memes.add(m.id));
+                                finished = messages.len() == 0;
+                            }
+                            Err(e) => error!("Error retrieving missed messages in {:?}: {e:?}", g),
+                        };
+                    }
+                    if finished {
+                        config.save();
+                        break;
+                    }
+                }
+            }
+        }
+        drop(data);
+        ctx
+    }
 }
 
 #[async_trait]
@@ -37,77 +79,28 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
+        let ctx = Self::catch_up_messages(ctx, &g).await;
+
         tokio::spawn(async move {
             loop {
                 let data = ctx.data.read().await;
-                let config = data.get::<Config>().unwrap();
-                let guild = config.guild(&g.id);
-                if let Some(guild) = guild {
-                    if let Some(memes) = guild.memes() {
-                        let reset_time = memes.next_reset();
-                        info!("Next reset: {}", reset_time);
-                        drop(data);
-                        let now = Utc::now();
-                        let time_until_ping = reset_time
-                            .checked_sub_days(Days::new(2))
-                            .unwrap()
-                            .signed_duration_since(now);
-                        if time_until_ping.num_seconds() > 0 {
-                            info!(
-                                "Sleeping for {}s until it's time to ping",
-                                time_until_ping.num_seconds()
-                            );
-                            tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
-                            let data = ctx.data.read().await;
-                            let config = data.get::<Config>().unwrap();
-                            let guild = config.guild(&g.id);
-                            if let Some(guild) = guild {
-                                if let Some(memes) = guild.memes() {
-                                    let channel = memes
-                                        .channel()
-                                        .to_channel(&ctx.http)
-                                        .await
-                                        .unwrap()
-                                        .guild()
-                                        .unwrap();
-                                    if memes.list().len() == 0 {
-                                        channel
-                                            .send_message(&ctx.http, |m| {
-                                                m.add_embed(|e| {
-                                                    e.description(
-                                                "**No memes?**
-Two days left! Perhaps time to post some?",
-                                            )
-                                            .image(
-                                                "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif",
-                                            )
-                                            .colour(crate::COLOUR)
-                                                })
-                                            })
-                                            .await
-                                            .unwrap();
-                                    }
-                                }
-                            }
-                            drop(data);
-                        }
-                        let now = Utc::now();
-                        let time_until_reset = reset_time.signed_duration_since(now);
-                        if time_until_reset.num_seconds() > 0 {
-                            info!(
-                                "Sleeping for {}s until it's time to reset",
-                                time_until_reset.num_seconds()
-                            );
-                            tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
-                            // in case the settings have changed during
-                            // our long slumber, give the earlier checks
-                            // another go:
-                            continue;
-                        }
-                        let mut data = ctx.data.write().await;
-                        let config = data.get_mut::<Config>().unwrap();
-                        let guild = config.guild_mut(&g.id);
-                        if let Some(memes) = guild.memes_mut() {
+                if let Some(memes) = get_memes(&data, &g.id) {
+                    let reset_time = memes.next_reset();
+                    info!("Next reset: {}", reset_time);
+                    drop(data);
+                    let now = Utc::now();
+                    let time_until_ping = reset_time
+                        .checked_sub_days(Days::new(2))
+                        .unwrap()
+                        .signed_duration_since(now);
+                    if time_until_ping.num_seconds() > 0 {
+                        info!(
+                            "Sleeping for {}s until it's time to ping",
+                            time_until_ping.num_seconds()
+                        );
+                        tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
+                        let data = ctx.data.read().await;
+                        if let Some(memes) = get_memes(&data, &g.id) {
                             let channel = memes
                                 .channel()
                                 .to_channel(&ctx.http)
@@ -115,6 +108,45 @@ Two days left! Perhaps time to post some?",
                                 .unwrap()
                                 .guild()
                                 .unwrap();
+                            if memes.list().len() == 0 {
+                                channel
+                                    .send_message(&ctx.http, |m| {
+                                        m.add_embed(|e| {
+                                            e.description(
+                                                "**No memes?**
+Two days left! Perhaps time to post some?",
+                                            )
+                                            .image(
+                                                "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif",
+                                            )
+                                            .colour(crate::COLOUR)
+                                        })
+                                    })
+                                    .await
+                                    .ok();
+                            }
+                        }
+                        drop(data);
+                    }
+                    let now = Utc::now();
+                    let time_until_reset = reset_time.signed_duration_since(now);
+                    if time_until_reset.num_seconds() > 0 {
+                        info!(
+                            "Sleeping for {}s until it's time to reset",
+                            time_until_reset.num_seconds()
+                        );
+                        tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
+                        // in case the settings have changed during
+                        // our long slumber, give the earlier checks
+                        // another go:
+                        continue;
+                    }
+                    let mut data = ctx.data.write().await;
+                    let config = data.get_mut::<Config>().unwrap();
+                    let guild = config.guild_mut(&g.id);
+                    if let Some(memes) = guild.memes_mut() {
+                        if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
+                            let channel = channel.guild().unwrap();
                             let mut most_reactions = 0;
                             let mut victor: Option<Message> = None;
                             for meme in memes.list() {
@@ -170,10 +202,8 @@ You've got until {}.",
                             }
                             config.save();
                         }
-                        drop(data);
-                    } else {
-                        drop(data);
                     }
+                    drop(data);
                 } else {
                     drop(data);
                 }
