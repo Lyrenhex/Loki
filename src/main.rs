@@ -3,8 +3,6 @@ mod config;
 mod error;
 mod serenity_handler;
 
-// use std::time::Duration;
-
 use log::error;
 use serenity::{prelude::GatewayIntents, utils::Colour};
 
@@ -14,7 +12,7 @@ pub use error::Error;
 use serenity_handler::SerenityHandler;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
-const DATE_FMT: &str = "%k:%M%P on %A %e %B %Y";
+const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y";
 
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
