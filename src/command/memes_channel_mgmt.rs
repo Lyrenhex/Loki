@@ -50,7 +50,7 @@ pub fn memes_channel_mgmt() -> Command<'static> {
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
-                                    reset_time, // TODO: format time
+                                    reset_time.format(crate::DATE_FMT),
                                 ))
                                 .colour(COLOUR)
                             })

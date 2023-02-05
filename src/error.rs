@@ -52,7 +52,13 @@ _Do I have all required permissions to all appropriate channels?_
                             )
                         }
                     }
-                    _ => todo!(),
+                    e => write!(
+                        f,
+                        "**Serenity HTTP Error**
+```json
+{e:?}
+```"
+                    ),
                 },
                 e => write!(
                     f,

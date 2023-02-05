@@ -70,8 +70,7 @@ impl EventHandler for SerenityHandler<'_> {
                                         .unwrap()
                                         .guild()
                                         .unwrap();
-                                    let no_memes = memes.list().len() == 0;
-                                    if no_memes {
+                                    if memes.list().len() == 0 {
                                         channel
                                             .send_message(&ctx.http, |m| {
                                                 m.add_embed(|e| {
@@ -142,9 +141,12 @@ their entry [here]({})!
 It won with a resounding {most_reactions} votes.
 
 I've reset the entries, so post your best memes and perhaps next \
-week you'll win? 😉",
+week you'll win? 😉
+
+You've got until {}.",
                                                 victor.author.mention(),
-                                                victor.link()
+                                                victor.link(),
+                                                memes.next_reset().format(crate::DATE_FMT),
                                             ))
                                             .colour(COLOUR)
                                         })
@@ -159,7 +161,10 @@ week you'll win? 😉",
                                                 "**No votes**
 There weren't any votes (reactions), so there's no winner. Sadge.
 
-I've reset the entries, so can you, like, _do something_ this week?",
+I've reset the entries, so can you, like, _do something_ this week?
+
+You've got until {}.",
+                                                memes.next_reset().format(crate::DATE_FMT)
                                             ))
                                             .colour(COLOUR)
                                         })

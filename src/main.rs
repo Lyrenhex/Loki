@@ -14,6 +14,7 @@ pub use error::Error;
 use serenity_handler::SerenityHandler;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
+const DATE_FMT: &str = "%k:%M%P on %A %e %B %Y";
 
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
