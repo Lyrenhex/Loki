@@ -100,6 +100,10 @@ Two days left! Perhaps time to post some?",
                                 time_until_reset.num_seconds()
                             );
                             tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
+                            // in case the settings have changed during
+                            // our long slumber, give the earlier checks
+                            // another go:
+                            continue;
                         }
                         let mut data = ctx.data.write().await;
                         let config = data.get_mut::<Config>().unwrap();
