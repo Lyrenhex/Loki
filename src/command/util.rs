@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use log::error;
 use serenity::{
-    builder::CreateEmbed,
+    builder::{CreateEmbed, CreateMessage},
     http::Http,
     model::prelude::interaction::{
         application_command::ApplicationCommandInteraction, InteractionResponseType,
@@ -12,6 +12,14 @@ use serenity::{
 };
 
 use crate::COLOUR;
+
+/// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
+/// from the provided input string.
+pub fn create_embed(
+    s: String,
+) -> impl for<'a, 'b> FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a> {
+    move |m: &mut CreateMessage| m.add_embed(|e| e.description(s).colour(COLOUR))
+}
 
 /// Create a text-based embed response with the given `message`.
 pub async fn create_response(

@@ -14,7 +14,7 @@ use serenity::{
     prelude::{Context, EventHandler, Mentionable},
 };
 
-use crate::{config::Config, COLOUR};
+use crate::config::Config;
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
@@ -81,7 +81,7 @@ Two days left! Perhaps time to post some?",
                                             .image(
                                                 "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif",
                                             )
-                                            .colour(COLOUR)
+                                            .colour(crate::COLOUR)
                                                 })
                                             })
                                             .await
@@ -131,10 +131,10 @@ Two days left! Perhaps time to post some?",
                             memes.reset();
                             if let Some(victor) = victor {
                                 channel
-                                    .send_message(&ctx.http, |m| {
-                                        m.add_embed(|e| {
-                                            e.description(format!(
-                                                "**Voting results**
+                                    .send_message(
+                                        &ctx.http,
+                                        crate::command::create_embed(format!(
+                                            "**Voting results**
 Congratulations {} for winning this week's meme contest, with \
 their entry [here]({})!
 
@@ -144,31 +144,27 @@ I've reset the entries, so post your best memes and perhaps next \
 week you'll win? 😉
 
 You've got until {}.",
-                                                victor.author.mention(),
-                                                victor.link(),
-                                                memes.next_reset().format(crate::DATE_FMT),
-                                            ))
-                                            .colour(COLOUR)
-                                        })
-                                    })
+                                            victor.author.mention(),
+                                            victor.link(),
+                                            memes.next_reset().format(crate::DATE_FMT),
+                                        )),
+                                    )
                                     .await
                                     .unwrap();
                             } else {
                                 channel
-                                    .send_message(&ctx.http, |m| {
-                                        m.add_embed(|e| {
-                                            e.description(format!(
-                                                "**No votes**
+                                    .send_message(
+                                        &ctx.http,
+                                        crate::command::create_embed(format!(
+                                            "**No votes**
 There weren't any votes (reactions), so there's no winner. Sadge.
 
 I've reset the entries, so can you, like, _do something_ this week?
 
 You've got until {}.",
-                                                memes.next_reset().format(crate::DATE_FMT)
-                                            ))
-                                            .colour(COLOUR)
-                                        })
-                                    })
+                                            memes.next_reset().format(crate::DATE_FMT)
+                                        )),
+                                    )
                                     .await
                                     .unwrap();
                             }

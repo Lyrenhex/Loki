@@ -5,7 +5,7 @@ use serenity::model::{
     Permissions,
 };
 
-use crate::{config::Config, COLOUR};
+use crate::config::Config;
 
 use super::{create_response, Command, PermissionType};
 
@@ -44,17 +44,15 @@ pub fn memes_channel_mgmt() -> Command<'static> {
                     drop(data);
                     let resp = format!("Memes channel set to {}.", channel);
                     channel
-                        .send_message(&ctx.http, |m| {
-                            m.embed(|e| {
-                                e.description(format!(
-                                    "**Post your best memes!**
+                        .send_message(
+                            &ctx.http,
+                            super::create_embed(format!(
+                                "**Post your best memes!**
 Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
-                                    reset_time.format(crate::DATE_FMT),
-                                ))
-                                .colour(COLOUR)
-                            })
-                        })
+                                reset_time.format(crate::DATE_FMT),
+                            )),
+                        )
                         .await?;
                     create_response(&ctx.http, command, &resp).await;
                     Ok(())
@@ -95,15 +93,14 @@ The post with the most total reactions by {} wins!",
                 if let Some(channel) = channel {
                     if let Some(channel) = channel.to_channel(&ctx.http).await?.guild() {
                         channel
-                            .send_message(&ctx.http, |m| {
-                                m.embed(|e| {
-                                    e.description(
-                                        "**Halt your memes!**
-I won't see them anymore. :(",
-                                    )
-                                    .colour(COLOUR)
-                                })
-                            })
+                            .send_message(
+                                &ctx.http,
+                                super::create_embed(
+                                    "**Halt your memes!**
+I won't see them anymore. :("
+                                        .to_string(),
+                                ),
+                            )
                             .await?;
                     }
                 }
