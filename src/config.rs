@@ -47,21 +47,23 @@ impl Config {
     /// the location specified by the `LOKI_CONFIG_PATH` environment
     /// variable or `config.toml` by default.
     pub fn load() -> Self {
-        let config_path = env::var("LOKI_CONFIG_PATH").unwrap_or("config.toml".to_string());
+        let config_path =
+            env::var("LOKI_CONFIG_PATH").unwrap_or_else(|_| "config.toml".to_string());
 
         let config = match fs::read_to_string(&config_path) {
             Ok(s) => s,
             Err(e) => panic!("Unable to read config at '{}': {:?}", &config_path, e),
         };
         let mut config: Self = toml::from_str(&config).unwrap();
-        if let None = config.guilds {
+        if config.guilds.is_none() {
             config.guilds = Some(HashMap::new());
         }
         config
     }
 
     pub fn save(&self) {
-        let config_path = env::var("LOKI_CONFIG_PATH").unwrap_or("config.toml".to_string());
+        let config_path =
+            env::var("LOKI_CONFIG_PATH").unwrap_or_else(|_| "config.toml".to_string());
 
         match toml::to_string_pretty(self) {
             Ok(s) => {
@@ -90,9 +92,7 @@ impl Config {
 
     pub fn guild_mut(&mut self, id: &GuildId) -> &mut Guild {
         if let Some(guilds) = &mut self.guilds {
-            if !guilds.contains_key(&id.to_string()) {
-                guilds.insert(id.to_string(), Guild::default());
-            }
+            guilds.entry(id.to_string()).or_insert_with(Guild::default);
             return guilds.get_mut(&id.to_string()).unwrap();
         } else {
             unreachable!()
@@ -161,6 +161,7 @@ pub struct Memes {
     channel: ChannelId,
     last_reset: chrono::DateTime<Utc>,
     memes_list: Vec<MessageId>,
+    reacted: bool,
 }
 
 impl Memes {
@@ -169,6 +170,7 @@ impl Memes {
             channel,
             last_reset: Utc::now(),
             memes_list: Vec::new(),
+            reacted: false,
         }
     }
 
@@ -187,9 +189,18 @@ impl Memes {
     pub fn reset(&mut self) {
         self.last_reset = Utc::now();
         self.memes_list.clear();
+        self.reacted = false;
     }
 
     pub fn channel(&self) -> ChannelId {
         self.channel
+    }
+
+    pub fn has_reacted(&self) -> bool {
+        self.reacted
+    }
+
+    pub fn reacted(&mut self) {
+        self.reacted = true;
     }
 }

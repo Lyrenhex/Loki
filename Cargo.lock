@@ -651,11 +651,12 @@ dependencies = [
 
 [[package]]
 name = "loki-discord-bot"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "env_logger",
  "log",
+ "rand",
  "serde",
  "serenity",
  "tokio",

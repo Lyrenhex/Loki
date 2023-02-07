@@ -77,12 +77,10 @@ The post with the most total reactions by {} wins!",
             Box::pin(async {
                 let mut data = ctx.data.write().await;
                 let config = data.get_mut::<Config>().unwrap();
-                let channel =
-                    if let Some(memes) = config.guild_mut(&command.guild_id.unwrap()).memes() {
-                        Some(memes.channel())
-                    } else {
-                        None
-                    };
+                let channel = config
+                    .guild_mut(&command.guild_id.unwrap())
+                    .memes()
+                    .map(|memes| memes.channel());
                 config
                     .guild_mut(&command.guild_id.unwrap())
                     .set_memes_channel(None);

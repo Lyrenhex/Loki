@@ -20,7 +20,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GITHUB_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const FEATURES: &str =
     "- `/status_meaning` to determine the meaning of the bot manager's Discord status.
-    - `/memes` (`Manage Channels` permissions required) to control the meme voting system.";
+- Meme voting system.";
 
 pub type Result = core::result::Result<(), Error>;
 
@@ -49,13 +49,9 @@ async fn main() {
     loop {
         // start listening for events by starting a single shard
         if let Err(err) = client.start().await {
-            match err {
-                _ => {
-                    // unknown error (fatal): announce and terminate.
-                    error!("*FATAL*: {:?}", err);
-                    break;
-                }
-            }
+            // unknown error (fatal): announce and terminate.
+            error!("*FATAL*: {:?}", err);
+            break;
         }
     }
 }

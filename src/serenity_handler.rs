@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use chrono::{Days, Utc};
 use log::{error, info};
+use rand::Rng;
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::{
@@ -19,6 +20,8 @@ use crate::config::{get_memes, Config};
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
+
+const REACTION_CHANCE: f64 = 0.1;
 
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
@@ -50,7 +53,7 @@ impl SerenityHandler<'_> {
                                     .iter()
                                     .filter(|m| !m.is_own(&ctx.cache))
                                     .for_each(|m| memes.add(m.id));
-                                finished = messages.len() == 0;
+                                finished = messages.is_empty();
                             }
                             Err(e) => error!("Error retrieving missed messages in {:?}: {e:?}", g),
                         };
@@ -108,7 +111,7 @@ impl EventHandler for SerenityHandler<'_> {
                                 .unwrap()
                                 .guild()
                                 .unwrap();
-                            if memes.list().len() == 0 {
+                            if memes.list().is_empty() {
                                 channel
                                     .send_message(&ctx.http, |m| {
                                         m.add_embed(|e| {
@@ -149,8 +152,15 @@ Two days left! Perhaps time to post some?",
                             let channel = channel.guild().unwrap();
                             let mut most_reactions = 0;
                             let mut victor: Option<Message> = None;
+                            let mut reacted = memes.has_reacted();
                             for meme in memes.list() {
                                 if let Ok(meme) = channel.message(&ctx.http, meme).await {
+                                    if !reacted
+                                        && rand::thread_rng().gen_bool(REACTION_CHANCE)
+                                        && meme.react(&ctx.http, '🤖').await.is_ok()
+                                    {
+                                        reacted = true;
+                                    }
                                     let total_reactions: u64 =
                                         meme.reactions.iter().map(|m| m.count).sum();
                                     if total_reactions > most_reactions {
@@ -228,7 +238,7 @@ You've got until {}.",
             for cmd in self.commands.iter() {
                 if cmd.name() == command.data.name {
                     let mut cmd = cmd;
-                    if command.data.options.len() > 0
+                    if !command.data.options.is_empty()
                         && command.data.options[0].kind == CommandOptionType::SubCommand
                     {
                         for subcmd in cmd.variants() {
@@ -255,6 +265,12 @@ You've got until {}.",
         let guild = config.guild_mut(&message.guild_id.unwrap());
         if let Some(memes) = guild.memes_mut() {
             if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
+                if !memes.has_reacted()
+                    && rand::thread_rng().gen_bool(REACTION_CHANCE)
+                    && message.react(&ctx.http, '🤖').await.is_ok()
+                {
+                    memes.reacted();
+                }
                 memes.add(message.id);
                 config.save()
             }
@@ -323,12 +339,12 @@ impl<'a> SerenityHandler<'a> {
         }
         #[cfg(debug_assertions)]
         {
-            let guild = GuildId(
-                DEBUG_GUILD_ID.parse::<u64>().expect(
+            let guild = GuildId(DEBUG_GUILD_ID.parse::<u64>().unwrap_or_else(|_| {
+                panic!(
+                    "{}",
                     ("Couldn't parse 'LOKI_DEBUG_GUILD_ID' as a u64: ".to_owned() + DEBUG_GUILD_ID)
-                        .as_str(),
-                ),
-            )
+                )
+            }))
             .to_partial_guild(&ctx.http)
             .await
             .unwrap();

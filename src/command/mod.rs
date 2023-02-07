@@ -31,7 +31,7 @@ type ActionRoutine = Box<
         + Send,
 >;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PermissionType {
     /// Available for use by anyone (including in DMs).
     /// Note that individual commands may, in certain circumstances,
@@ -94,12 +94,12 @@ impl<'a> Command<'a> {
 
     /// Get the [Command]'s name.
     pub fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     /// Get the [Command]'s description.
     pub fn description(&self) -> &str {
-        &self.description
+        self.description
     }
 
     /// Get the [PermissionType] for the [Command].
@@ -169,11 +169,11 @@ impl<'a> Option<'a> {
     }
 
     pub fn name(&self) -> &'a str {
-        &self.name
+        self.name
     }
 
     pub fn description(&self) -> &'a str {
-        &self.description
+        self.description
     }
 
     pub fn kind(&self) -> CommandOptionType {

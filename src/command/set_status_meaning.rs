@@ -68,7 +68,7 @@ pub fn set_status_meaning() -> Command<'static> {
                     for input in inputs.iter() {
                         if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
                             if it.custom_id == "new_status_meaning" {
-                                if it.value != "" {
+                                if !it.value.is_empty() {
                                     config.set_status_meaning(Some(it.value.clone()));
                                 } else {
                                     config.set_status_meaning(None);
