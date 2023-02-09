@@ -86,7 +86,8 @@ impl EventHandler for SerenityHandler<'_> {
                     let nick = user.nick_in(&ctx.http, guild).await.unwrap_or(user.name);
                     if !nick.starts_with(STREAMING_PREFIX) {
                         // the user is streaming, but they aren't marked as such.
-                        let nick = STREAMING_PREFIX.to_owned() + &nick[0..(30.min(nick.len()))];
+                        let nick = STREAMING_PREFIX.to_owned()
+                            + &nick.chars().take(30).collect::<String>();
                         if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
                             if let Err(e) = guild
                                 .edit_member(&ctx.http, user.id, |u| u.nickname(nick))
@@ -105,7 +106,7 @@ impl EventHandler for SerenityHandler<'_> {
                 if let Some(nick) = nick {
                     if nick.starts_with(STREAMING_PREFIX) {
                         // the user isn't streaming any more, but they are still marked as such.
-                        let nick = &nick[2..];
+                        let nick = nick.chars().skip(2).collect::<String>();
                         if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
                             if let Err(e) = guild
                                 .edit_member(&ctx.http, user.id, |u| u.nickname(nick))
