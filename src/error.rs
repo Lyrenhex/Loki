@@ -36,6 +36,12 @@ Badger the bot manager about it."
                                 f,
                                 "**Serenity HTTP Error: {}**
 _Do I have all required permissions to all appropriate channels?_
+I require:
+- `Send Messages` in any channel you want me to operate in.
+- `Read Message History` and `Add Reactions` in the memes channel.
+- `Manage Nicknames` to automatically identify people who are \
+livestreaming.
+
 ```json
 {:?}
 ```",

@@ -1,8 +1,6 @@
-mod memes_channel_mgmt;
 mod set_status_meaning;
 mod util;
 
-pub use memes_channel_mgmt::memes_channel_mgmt;
 pub use set_status_meaning::set_status_meaning;
 pub use util::*;
 
