@@ -1,5 +1,4 @@
 use log::{error, info};
-#[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::{
     async_trait,
