@@ -73,15 +73,14 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn presence_update(&self, ctx: Context, new_data: Presence) {
-        println!("{:?}", new_data);
+        let data = ctx.data.read().await;
+        let config = data.get::<Config>().unwrap();
         if new_data
             .activities
             .iter()
             .any(|a| a.kind == ActivityType::Streaming)
         {
             if let Some(user) = new_data.user.to_user() {
-                let data = ctx.data.read().await;
-                let config = data.get::<Config>().unwrap();
                 for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
                     let user = user.clone();
                     let nick = user.nick_in(&ctx.http, guild).await.unwrap_or(user.name);
@@ -98,11 +97,8 @@ impl EventHandler for SerenityHandler<'_> {
                         }
                     }
                 }
-                drop(data);
             }
         } else if let Some(user) = new_data.user.to_user() {
-            let data = ctx.data.read().await;
-            let config = data.get::<Config>().unwrap();
             for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
                 let user = user.clone();
                 let nick = user.nick_in(&ctx.http, guild).await;
@@ -121,8 +117,8 @@ impl EventHandler for SerenityHandler<'_> {
                     }
                 }
             }
-            drop(data);
         }
+        drop(data);
     }
 }
 
