@@ -73,6 +73,7 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn presence_update(&self, ctx: Context, new_data: Presence) {
+        info!("Handling Presence update for {}...", new_data.user.id);
         let data = ctx.data.read().await;
         let config = data.get::<Config>().unwrap();
         if new_data

@@ -134,9 +134,9 @@ impl Memes {
     /// Catch up on any messages that were missed while the bot was
     /// offline.
     pub async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
-        info!("Catching up with messages for guild {}...", g.id);
         let mut finished = true;
         let mut data = ctx.data.write().await;
+        info!("Catching up with messages for guild {}...", g.id);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
         if let Some(memes) = guild.memes_mut() {
