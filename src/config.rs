@@ -1,3 +1,4 @@
+use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::{env, fs};
 use tokio::sync::RwLockReadGuard;
@@ -77,6 +78,14 @@ impl Config {
 
     pub fn get_manager(&self) -> UserId {
         self.manager
+    }
+
+    pub fn guilds(&self) -> Keys<'_, std::string::String, Guild> {
+        if let Some(guilds) = &self.guilds {
+            guilds.keys()
+        } else {
+            unreachable!();
+        }
     }
 
     pub fn guild(&self, id: &GuildId) -> Option<&Guild> {

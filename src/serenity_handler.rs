@@ -1,73 +1,26 @@
-use std::time::Duration;
-
-use chrono::{Days, Utc};
 use log::{error, info};
-use rand::Rng;
-#[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::{
     async_trait,
     model::prelude::{
         command::{Command, CommandOptionType},
         interaction::Interaction,
-        Activity, Guild, Message, Ready,
+        Activity, ActivityType, Guild, Message, Presence, Ready,
     },
-    prelude::{Context, EventHandler, Mentionable},
+    prelude::{Context, EventHandler},
 };
 
-use crate::config::{get_memes, Config};
+use crate::config::Config;
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
 
-const REACTION_CHANCE: f64 = 0.1;
+const STREAMING_PREFIX: &str = "🔴 ";
 
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
     commands: Vec<crate::command::Command<'a>>,
-}
-
-impl SerenityHandler<'_> {
-    /// Catch up on any messages that were missed while the bot was
-    /// offline.
-    async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
-        let mut finished = true;
-        let mut data = ctx.data.write().await;
-        let config = data.get_mut::<Config>().unwrap();
-        let guild = config.guild_mut(&g.id);
-        if let Some(memes) = guild.memes_mut() {
-            // catch up on any messages that were missed while we were offline.
-            if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
-                let channel = channel.guild().unwrap();
-                loop {
-                    if let Some(last_message) = memes.list().last() {
-                        match channel
-                            .messages(&ctx.http, |retriever| {
-                                retriever.after(last_message).limit(100)
-                            })
-                            .await
-                        {
-                            Ok(messages) => {
-                                messages
-                                    .iter()
-                                    .filter(|m| !m.is_own(&ctx.cache))
-                                    .for_each(|m| memes.add(m.id));
-                                finished = messages.is_empty();
-                            }
-                            Err(e) => error!("Error retrieving missed messages in {:?}: {e:?}", g),
-                        };
-                    }
-                    if finished {
-                        config.save();
-                        break;
-                    }
-                }
-            }
-        }
-        drop(data);
-        ctx
-    }
 }
 
 #[async_trait]
@@ -82,155 +35,11 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
-        let ctx = Self::catch_up_messages(ctx, &g).await;
+        let ctx = crate::subsystems::Memes::catch_up_messages(ctx, &g).await;
 
-        tokio::spawn(async move {
-            loop {
-                let data = ctx.data.read().await;
-                if let Some(memes) = get_memes(&data, &g.id) {
-                    let reset_time = memes.next_reset();
-                    info!("Next reset: {}", reset_time);
-                    drop(data);
-                    let now = Utc::now();
-                    let time_until_ping = reset_time
-                        .checked_sub_days(Days::new(2))
-                        .unwrap()
-                        .signed_duration_since(now);
-                    if time_until_ping.num_seconds() > 0 {
-                        info!(
-                            "Sleeping for {}s until it's time to ping",
-                            time_until_ping.num_seconds()
-                        );
-                        tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
-                        let data = ctx.data.read().await;
-                        if let Some(memes) = get_memes(&data, &g.id) {
-                            let channel = memes
-                                .channel()
-                                .to_channel(&ctx.http)
-                                .await
-                                .unwrap()
-                                .guild()
-                                .unwrap();
-                            if memes.list().is_empty() {
-                                channel
-                                    .send_message(&ctx.http, |m| {
-                                        m.add_embed(|e| {
-                                            e.description(
-                                                "**No memes?**
-Two days left! Perhaps time to post some?",
-                                            )
-                                            .image(
-                                                "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif",
-                                            )
-                                            .colour(crate::COLOUR)
-                                        })
-                                    })
-                                    .await
-                                    .ok();
-                            }
-                        }
-                        drop(data);
-                    }
-                    let now = Utc::now();
-                    let time_until_reset = reset_time.signed_duration_since(now);
-                    if time_until_reset.num_seconds() > 0 {
-                        info!(
-                            "Sleeping for {}s until it's time to reset",
-                            time_until_reset.num_seconds()
-                        );
-                        tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
-                        // in case the settings have changed during
-                        // our long slumber, give the earlier checks
-                        // another go:
-                        continue;
-                    }
-                    let mut data = ctx.data.write().await;
-                    let config = data.get_mut::<Config>().unwrap();
-                    let guild = config.guild_mut(&g.id);
-                    if let Some(memes) = guild.memes_mut() {
-                        if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
-                            let channel = channel.guild().unwrap();
-                            let mut most_reactions = 0;
-                            let mut victor: Option<Message> = None;
-                            let mut reacted = memes.has_reacted();
-                            for meme in memes.list() {
-                                if let Ok(meme) = channel.message(&ctx.http, meme).await {
-                                    if !reacted
-                                        && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                                        && meme.react(&ctx.http, '🤖').await.is_ok()
-                                    {
-                                        reacted = true;
-                                    }
-                                    let total_reactions: u64 =
-                                        meme.reactions.iter().map(|m| m.count).sum();
-                                    if total_reactions > most_reactions {
-                                        most_reactions = total_reactions;
-                                        victor = Some(meme);
-                                    }
-                                }
-                            }
-
-                            memes.reset();
-                            if let Some(victor) = victor {
-                                channel
-                                    .send_message(
-                                        &ctx.http,
-                                        crate::command::create_embed(format!(
-                                            "**Voting results**
-Congratulations {} for winning this week's meme contest, with \
-their entry [here]({})!
-
-It won with a resounding {most_reactions} votes.
-
-I've reset the entries, so post your best memes and perhaps next \
-week you'll win? 😉
-
-You've got until {}.",
-                                            victor.author.mention(),
-                                            victor.link(),
-                                            memes.next_reset().format(crate::DATE_FMT),
-                                        )),
-                                    )
-                                    .await
-                                    .unwrap();
-                            } else {
-                                channel
-                                    .send_message(
-                                        &ctx.http,
-                                        crate::command::create_embed(format!(
-                                            "**No votes**
-There weren't any votes (reactions), so there's no winner. Sadge.
-
-I've reset the entries, so can you, like, _do something_ this week?
-
-You've got until {}.",
-                                            memes.next_reset().format(crate::DATE_FMT)
-                                        )),
-                                    )
-                                    .await
-                                    .unwrap();
-                            }
-                            config.save();
-                        }
-                    }
-                    drop(data);
-                } else {
-                    drop(data);
-                }
-                // let up for a while so we don't hog the mutex...
-                // sleep for a day, which also gives a nice window to change
-                // the reset time if we're sleeping after a proper reset.
-                // if the memes channel is re-set during this day, then the
-                // system will properly start using the new artifical time.
-                // (eg, initially set up system at 10pm -> all resets occur
-                // at 10pm. wait until reset, and if you then re-set the memes
-                // channel at 7am the next morning, resets will start occuring
-                // at 7am.)
-                tokio::time::sleep(Duration::new(86_400, 0)).await;
-            }
-        })
-        .await
-        .unwrap();
+        tokio::spawn(crate::subsystems::Memes::init(ctx, g))
+            .await
+            .unwrap();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -260,19 +69,58 @@ You've got until {}.",
     }
 
     async fn message(&self, ctx: Context, message: Message) {
-        let mut data = ctx.data.write().await;
-        let config = data.get_mut::<Config>().unwrap();
-        let guild = config.guild_mut(&message.guild_id.unwrap());
-        if let Some(memes) = guild.memes_mut() {
-            if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
-                if !memes.has_reacted()
-                    && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                    && message.react(&ctx.http, '🤖').await.is_ok()
-                {
-                    memes.reacted();
+        crate::subsystems::Memes::message(&ctx, &message).await;
+    }
+
+    async fn presence_update(&self, ctx: Context, new_data: Presence) {
+        info!("Handling Presence update for {}...", new_data.user.id);
+        let data = ctx.data.read().await;
+        let config = data.get::<Config>().unwrap();
+        if new_data
+            .activities
+            .iter()
+            .any(|a| a.kind == ActivityType::Streaming)
+        {
+            if let Some(user) = new_data.user.to_user() {
+                for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
+                    let nick = user
+                        .nick_in(&ctx.http, guild)
+                        .await
+                        .unwrap_or(user.name.clone());
+                    if !nick.starts_with(STREAMING_PREFIX) {
+                        // the user is streaming, but they aren't marked as such.
+                        let old_nick = nick.clone();
+                        let nick = STREAMING_PREFIX.to_owned()
+                            + &nick.chars().take(30).collect::<String>();
+                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
+                            if let Err(e) = guild
+                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
+                                .await
+                            {
+                                error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
+                            }
+                        }
+                    }
                 }
-                memes.add(message.id);
-                config.save()
+            }
+        } else if let Some(user) = new_data.user.to_user() {
+            for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
+                let nick = user.nick_in(&ctx.http, guild).await;
+                if let Some(nick) = nick {
+                    if nick.starts_with(STREAMING_PREFIX) {
+                        // the user isn't streaming any more, but they are still marked as such.
+                        let old_nick = nick.clone();
+                        let nick = nick.chars().skip(2).collect::<String>();
+                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
+                            if let Err(e) = guild
+                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
+                                .await
+                            {
+                                error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
+                            }
+                        }
+                    }
+                }
             }
         }
         drop(data);

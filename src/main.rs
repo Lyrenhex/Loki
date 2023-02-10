@@ -2,6 +2,7 @@ mod command;
 mod config;
 mod error;
 mod serenity_handler;
+mod subsystems;
 
 use log::error;
 use serenity::{prelude::GatewayIntents, utils::Colour};
@@ -10,6 +11,7 @@ use command::Command;
 use config::Config;
 pub use error::Error;
 use serenity_handler::SerenityHandler;
+use subsystems::Subsystem;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
 const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y";
@@ -20,7 +22,9 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GITHUB_URL: &str = env!("CARGO_PKG_REPOSITORY");
 const FEATURES: &str =
     "- `/status_meaning` to determine the meaning of the bot manager's Discord status.
-- Meme voting system.";
+- Meme voting system.
+- Automatic nickname change when people start streaming. \
+(Note that this is not available for the server owner...)";
 
 pub type Result = core::result::Result<(), Error>;
 
@@ -36,7 +40,7 @@ async fn main() {
 
     // Login with a bot token from the environment
     let mut client = config
-        .discord_client(GatewayIntents::non_privileged())
+        .discord_client(GatewayIntents::non_privileged() | GatewayIntents::GUILD_PRESENCES)
         .event_handler(handler)
         .await
         .expect("Error creating client");
@@ -122,6 +126,6 @@ prod {manager} to update this."
             })),
         ),
         command::set_status_meaning(),
-        command::memes_channel_mgmt(),
+        subsystems::Memes::generate_command(),
     ]
 }

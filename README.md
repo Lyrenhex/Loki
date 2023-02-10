@@ -27,6 +27,10 @@ and compares to the same list for GT7. Output in number of pages.
       and the system resets for the next week.
 - [ ] Reminders.
   - Probably generic reminders, set by server admins.
+- [x] Automatic nickname updates when live on Twitch.
+  - I will never understand why the built-in "Streamer mode" on
+    Discord simply doesn't do this. Having to check the status
+    to see if someone in a VC is streaming is, frankly, silly.
 
 Eventually roll [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver)'s behaviour into Loki.
 
