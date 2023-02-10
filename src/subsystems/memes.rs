@@ -152,10 +152,9 @@ impl Memes {
                             .await
                         {
                             Ok(messages) => {
-                                messages
-                                    .iter()
-                                    .filter(|m| !m.is_own(&ctx.cache))
-                                    .for_each(|m| memes.add(m.id));
+                                let messages: Vec<&Message> =
+                                    messages.iter().filter(|m| !m.is_own(&ctx.cache)).collect();
+                                messages.iter().for_each(|m| memes.add(m.id));
                                 finished = messages.is_empty();
                             }
                             Err(e) => {

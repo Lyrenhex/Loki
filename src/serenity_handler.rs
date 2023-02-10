@@ -83,8 +83,10 @@ impl EventHandler for SerenityHandler<'_> {
         {
             if let Some(user) = new_data.user.to_user() {
                 for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
-                    let user = user.clone();
-                    let nick = user.nick_in(&ctx.http, guild).await.unwrap_or(user.name);
+                    let nick = user
+                        .nick_in(&ctx.http, guild)
+                        .await
+                        .unwrap_or(user.name.clone());
                     if !nick.starts_with(STREAMING_PREFIX) {
                         // the user is streaming, but they aren't marked as such.
                         let old_nick = nick.clone();
@@ -103,7 +105,6 @@ impl EventHandler for SerenityHandler<'_> {
             }
         } else if let Some(user) = new_data.user.to_user() {
             for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
-                let user = user.clone();
                 let nick = user.nick_in(&ctx.http, guild).await;
                 if let Some(nick) = nick {
                     if nick.starts_with(STREAMING_PREFIX) {
