@@ -134,6 +134,7 @@ impl Memes {
     /// Catch up on any messages that were missed while the bot was
     /// offline.
     pub async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
+        info!("Catching up with messages for guild {}...", g.id);
         let mut finished = true;
         let mut data = ctx.data.write().await;
         let config = data.get_mut::<Config>().unwrap();
@@ -157,7 +158,9 @@ impl Memes {
                                     .for_each(|m| memes.add(m.id));
                                 finished = messages.is_empty();
                             }
-                            Err(e) => error!("Error retrieving missed messages in {:?}: {e:?}", g),
+                            Err(e) => {
+                                error!("Error retrieving missed messages in {}: {e:?}", g.id)
+                            }
                         };
                     }
                     if finished {
@@ -168,6 +171,7 @@ impl Memes {
             }
         }
         drop(data);
+        info!("Finished catching up with messages for guild {}.", g.id);
         ctx
     }
 
