@@ -1,6 +1,6 @@
 [package]
 name = "loki-discord-bot"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "A bot to serve various meme-related purposes within a personal Discord server."
 readme = "README.md"
@@ -11,16 +11,17 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.22", features = ["macros", "rt-multi-thread"] }
-env_logger = "0.10"
-toml = "0.7.1"
-serde = { version = "1.0", features = ["serde_derive"] }
-log = "0.4"
-chrono = { version = "0.4", features = ["serde"] }
-rand = "0.8.5"
+tokio = { version = "^1.22", features = ["macros", "rt-multi-thread"] }
+env_logger = "^0.10"
+toml = "^0.7.1"
+serde = { version = "^1.0", features = ["serde_derive"] }
+log = "^0.4"
+chrono = { version = "^0.4", features = ["serde"] }
+rand = "^0.8.5"
+tinyvec = "^1.6.0"
 
 [dependencies.serenity]
-version = "0.11"
+version = "^0.11"
 default-features = false
 features = [
     "builder",

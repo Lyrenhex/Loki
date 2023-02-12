@@ -2,9 +2,9 @@ use serenity::futures::StreamExt;
 
 use crate::config::Config;
 
-use super::{create_response, Command, PermissionType};
+use crate::command::{self, create_response, Command, PermissionType};
 
-pub fn set_status_meaning() -> Command<'static> {
+pub fn set() -> Command<'static> {
     Command::new(
         "set_status_meaning",
         "Manager-only: sets the meaning of the manager's Discord status.",
@@ -16,7 +16,7 @@ pub fn set_status_meaning() -> Command<'static> {
                 let manager = config.get_manager().to_user(&ctx.http).await?;
                 if command.user != manager {
                     let resp = format!("**Unauthorised:** You're not {}!", manager.tag());
-                    create_response(&ctx.http, command, &resp).await;
+                    create_response(&ctx.http, command, &resp, true).await;
                     return Ok(());
                 }
 
@@ -87,6 +87,38 @@ pub fn set_status_meaning() -> Command<'static> {
                 .collect::<Vec<_>>()
                 .await;
 
+                Ok(())
+            })
+        })),
+    )
+}
+
+pub fn get() -> Command<'static> {
+    Command::new(
+        "status_meaning",
+        "Retrieves the meaning of the bot managers's current Discord status.",
+        command::PermissionType::Universal,
+        Some(Box::new(move |ctx, command| {
+            Box::pin(async {
+                let data = ctx.data.read().await;
+                let config = data.get::<Config>().unwrap();
+                let manager = config.get_manager().to_user(&ctx.http).await?.tag();
+                let resp = match config.get_status_meaning() {
+                    Some(meaning) => format!(
+                        "**Status meaning:**
+{meaning}
+
+_If this meaning seems out-of-date, yell at {manager} to update \
+this!_"
+                    ),
+                    None => format!(
+                        "**No known meaning.**
+
+Assuming there _is_, in fact, a status message, you likely need to \
+prod {manager} to update this."
+                    ),
+                };
+                create_response(&ctx.http, command, &resp, false).await;
                 Ok(())
             })
         })),

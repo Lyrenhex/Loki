@@ -5,13 +5,15 @@ mod serenity_handler;
 mod subsystems;
 
 use log::error;
-use serenity::{prelude::GatewayIntents, utils::Colour};
+use serenity::{
+    prelude::{GatewayIntents, Mentionable},
+    utils::Colour,
+};
 
 use command::Command;
 use config::Config;
 pub use error::Error;
 use serenity_handler::SerenityHandler;
-use subsystems::Subsystem;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
 const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y";
@@ -24,7 +26,8 @@ const FEATURES: &str =
     "- `/status_meaning` to determine the meaning of the bot manager's Discord status.
 - Meme voting system.
 - Automatic nickname change when people start streaming. \
-(Note that this is not available for the server owner...)";
+(Note that this is not available for the server owner...)
+- Subscriptions to bot events.";
 
 pub type Result = core::result::Result<(), Error>;
 
@@ -77,7 +80,7 @@ fn generate_commands() -> Vec<Command<'static>> {
                         .get_manager()
                         .to_user(&ctx.http)
                         .await?
-                        .tag();
+                        .mention();
                     command::create_response(
                         &ctx.http,
                         command,
@@ -90,42 +93,16 @@ This instance of Loki is managed by {manager_tag}.
 Current features:
 {FEATURES}"
                         ),
+                        false,
                     )
                     .await;
                     Ok(())
                 })
             })),
         ),
-        Command::new(
-            "status_meaning",
-            "Retrieves the meaning of the bot managers's current Discord status.",
-            command::PermissionType::Universal,
-            Some(Box::new(move |ctx, command| {
-                Box::pin(async {
-                    let data = ctx.data.read().await;
-                    let config = data.get::<Config>().unwrap();
-                    let manager = config.get_manager().to_user(&ctx.http).await?.tag();
-                    let resp = match config.get_status_meaning() {
-                        Some(meaning) => format!(
-                            "**Status meaning:**
-{meaning}
-
-_If this meaning seems out-of-date, yell at {manager} to update \
-this!_"
-                        ),
-                        None => format!(
-                            "**No known meaning.**
-
-Assuming there _is_, in fact, a status message, you likely need to \
-prod {manager} to update this."
-                        ),
-                    };
-                    command::create_response(&ctx.http, command, &resp).await;
-                    Ok(())
-                })
-            })),
-        ),
-        command::set_status_meaning(),
-        subsystems::Memes::generate_command(),
+        subsystems::status_meaning::get(),
+        subsystems::status_meaning::set(),
+        subsystems::memes::generate_command(),
+        subsystems::events::generate_command(),
     ]
 }

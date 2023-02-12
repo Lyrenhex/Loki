@@ -7,11 +7,11 @@ use serenity::{
     model::prelude::interaction::{
         application_command::ApplicationCommandInteraction, InteractionResponseType,
     },
-    prelude::HttpError,
+    prelude::{Context, HttpError},
     Error,
 };
 
-use crate::COLOUR;
+use crate::{config::Config, subsystems::events::Event, COLOUR};
 
 /// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
 /// from the provided input string.
@@ -26,6 +26,7 @@ pub async fn create_response(
     http: &Arc<Http>,
     interaction: &mut ApplicationCommandInteraction,
     message: &String,
+    ephemeral: bool,
 ) {
     let mut embed = CreateEmbed::default();
     embed.description(message);
@@ -34,7 +35,9 @@ pub async fn create_response(
         .create_interaction_response(&http, |response| {
             response
                 .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| message.add_embed(embed.clone()))
+                .interaction_response_data(|message| {
+                    message.add_embed(embed.clone()).ephemeral(ephemeral)
+                })
         })
         .await
     {
@@ -69,4 +72,25 @@ pub async fn edit_embed_response(
                 .components(|components| components.set_action_rows(vec![]))
         })
         .await
+}
+
+/// Notify the subscribers to an event that it has fired.
+pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
+    let data = ctx.data.read().await;
+    let config = data.get::<Config>().unwrap();
+    if let Some(subscribers) = config.subscribers(event) {
+        for subscriber in subscribers {
+            match subscriber.to_user(&ctx.http).await {
+                Ok(u) => {
+                    if let Err(e) = u
+                        .direct_message(&ctx.http, create_embed(message.to_string()))
+                        .await
+                    {
+                        error!("Could not DM user {subscriber} ({}): {e:?}", u.tag());
+                    }
+                }
+                Err(e) => error!("User {subscriber} could not be resolved: {e:?}"),
+            }
+        }
+    }
 }
