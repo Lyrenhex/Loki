@@ -11,6 +11,8 @@ use serenity::client::{Client, ClientBuilder};
 use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
+use crate::subsystems::events::Event;
+
 /// Abstraction to try get a handle to a [GuildId]'s [Guild] entry
 /// from the config, based on a [RwLockReadGuard<TypeMap>] obtained
 /// from a [serenity::prelude::Context].
@@ -94,10 +96,7 @@ impl Config {
 
     pub fn guild(&self, id: &GuildId) -> Option<&Guild> {
         if let Some(guilds) = &self.guilds {
-            if !guilds.contains_key(&id.to_string()) {
-                return None;
-            }
-            return Some(guilds.get(&id.to_string()).unwrap());
+            guilds.get(&id.to_string())
         } else {
             unreachable!()
         }
@@ -105,8 +104,23 @@ impl Config {
 
     pub fn guild_mut(&mut self, id: &GuildId) -> &mut Guild {
         if let Some(guilds) = &mut self.guilds {
-            guilds.entry(id.to_string()).or_insert_with(Guild::default);
-            return guilds.get_mut(&id.to_string()).unwrap();
+            guilds.entry(id.to_string()).or_insert_with(Guild::default)
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn subscribers(&self, event: Event) -> Option<&Vec<UserId>> {
+        if let Some(subscribers) = &self.subscribers {
+            subscribers.get(&event)
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn subscribers_mut(&mut self, event: Event) -> &mut Vec<UserId> {
+        if let Some(subscribers) = &mut self.subscribers {
+            subscribers.entry(event).or_insert_with(Vec::new)
         } else {
             unreachable!()
         }

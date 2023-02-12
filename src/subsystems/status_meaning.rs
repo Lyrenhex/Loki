@@ -16,7 +16,7 @@ pub fn set() -> Command<'static> {
                 let manager = config.get_manager().to_user(&ctx.http).await?;
                 if command.user != manager {
                     let resp = format!("**Unauthorised:** You're not {}!", manager.tag());
-                    create_response(&ctx.http, command, &resp).await;
+                    create_response(&ctx.http, command, &resp, true).await;
                     return Ok(());
                 }
 
@@ -118,7 +118,7 @@ Assuming there _is_, in fact, a status message, you likely need to \
 prod {manager} to update this."
                     ),
                 };
-                command::create_response(&ctx.http, command, &resp).await;
+                create_response(&ctx.http, command, &resp, false).await;
                 Ok(())
             })
         })),

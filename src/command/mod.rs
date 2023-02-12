@@ -1,5 +1,6 @@
 mod util;
 
+use tinyvec::ArrayVec;
 pub use util::*;
 
 use std::pin::Pin;
@@ -141,13 +142,13 @@ impl<'a> Command<'a> {
 pub struct Option<'a> {
     name: &'a str,
     description: &'a str,
-    kind: OptionType<'a>,
+    kind: OptionType,
     required: bool,
 }
 
 impl<'a> Option<'a> {
-    pub fn new(name: &'a str, description: &'a str, kind: OptionType<'a>, required: bool) -> Self {
-        match kind {
+    pub fn new(name: &'a str, description: &'a str, kind: OptionType, required: bool) -> Self {
+        match kind.clone() {
             OptionType::StringInput(min, max) => {
                 if let Some(min) = min {
                     if min > 6000 {
@@ -237,8 +238,8 @@ impl<'a> Option<'a> {
         self.description
     }
 
-    pub fn kind(&self) -> OptionType<'a> {
-        self.kind
+    pub fn kind(&self) -> OptionType {
+        self.kind.clone()
     }
 
     pub fn required(&self) -> bool {
@@ -246,22 +247,22 @@ impl<'a> Option<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum OptionType<'a> {
+#[derive(Debug, Clone)]
+pub enum OptionType {
     /// A String input based on the given range (min, max).
     /// Limited to ([0..6000], [1..6000])
     StringInput(std::option::Option<u16>, std::option::Option<u16>),
     /// A String input based on the given options.
-    StringSelect(&'a [&'a str]),
+    StringSelect(ArrayVec<[String; 25]>),
     /// An integer input, optionally limited to a specific range.
     /// Note that integers must be between -2^53 and 2^53.
     IntegerInput(std::option::Option<i64>, std::option::Option<i64>),
     /// An integer select.
     /// Note that integers must be between -2^53 and 2^53.
-    IntegerSelect(&'a [i64]),
+    IntegerSelect(ArrayVec<[i64; 25]>),
     Boolean,
     User,
-    Channel(std::option::Option<&'a [ChannelType]>),
+    Channel(std::option::Option<Vec<ChannelType>>),
     Role,
     Mentionable,
     /// A double input, optionally limited to a specific range.
@@ -269,11 +270,11 @@ pub enum OptionType<'a> {
     NumberInput(std::option::Option<f64>, std::option::Option<f64>),
     /// A number (double) selection.
     /// Note that numbers must be between -2^53 and 2^53.
-    NumberSelect(&'a [f64]),
+    NumberSelect(ArrayVec<[f64; 25]>),
     Attachment,
 }
 
-impl From<OptionType<'_>> for CommandOptionType {
+impl From<OptionType> for CommandOptionType {
     fn from(ot: OptionType) -> Self {
         match ot {
             OptionType::StringInput(_, _) => CommandOptionType::String,

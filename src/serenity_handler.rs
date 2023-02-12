@@ -1,5 +1,6 @@
-use crate::command::OptionType;
+use crate::command::{notify_subscribers, OptionType};
 use crate::subsystems;
+use crate::subsystems::events::Event;
 use log::{error, info};
 use serenity::model::prelude::GuildId;
 use serenity::{
@@ -30,6 +31,22 @@ impl EventHandler for SerenityHandler<'_> {
 
         // creates the global application commands
         self.create_commands(&ctx).await;
+
+        notify_subscribers(
+            &ctx,
+            Event::Startup,
+            format!(
+                "**Hey!**
+I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
+                crate::VERSION,
+                crate::GITHUB_URL,
+                crate::VERSION,
+            )
+            .as_str(),
+        )
+        .await;
+
+        notify_subscribers(&ctx, Event::Error, "test error!").await;
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
@@ -55,8 +72,23 @@ impl EventHandler for SerenityHandler<'_> {
                     };
                     if let Err(e) = cmd.run(&ctx, &mut command).await {
                         error!("Error running '{}': {e:?}", cmd.name());
-                        crate::command::create_response(&ctx.http, &mut command, &format!("{e}"))
-                            .await;
+                        notify_subscribers(
+                            &ctx,
+                            Event::Error,
+                            &format!(
+                                "**Error running '{}':**
+{e}",
+                                cmd.name()
+                            ),
+                        )
+                        .await;
+                        crate::command::create_response(
+                            &ctx.http,
+                            &mut command,
+                            &format!("{e}"),
+                            false,
+                        )
+                        .await;
                     }
                     break;
                 }
@@ -134,7 +166,7 @@ impl<'a> SerenityHandler<'a> {
                                     }
                                     OptionType::Channel(types) => {
                                         if let Some(types) = types {
-                                            option.channel_types(types);
+                                            option.channel_types(&types);
                                         }
                                     }
                                     OptionType::Boolean

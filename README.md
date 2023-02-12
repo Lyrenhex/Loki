@@ -31,6 +31,10 @@ and compares to the same list for GT7. Output in number of pages.
   - I will never understand why the built-in "Streamer mode" on
     Discord simply doesn't do this. Having to check the status
     to see if someone in a VC is streaming is, frankly, silly.
+- [x] Event system
+  - Users may choose to receive specific bot events, which will be
+    DM'd to them when the event fires. This feature is a prelude of
+    the Reminders feature.
 
 Eventually roll [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver)'s behaviour into Loki.
 

@@ -7,16 +7,21 @@ use serenity::{
     model::{
         prelude::{
             interaction::application_command::CommandDataOptionValue, ChannelType, Guild, Message,
+            MessageFlags,
         },
         Permissions,
     },
     prelude::{Context, Mentionable},
 };
 
-use crate::{command::OptionType, config::Config};
 use crate::{
     command::{create_embed, create_response, Command, PermissionType},
     config::get_memes,
+};
+use crate::{
+    command::{notify_subscribers, OptionType},
+    config::Config,
+    subsystems::events::Event,
 };
 
 const REACTION_CHANCE: f64 = 0.1;
@@ -67,7 +72,7 @@ The post with the most total reactions by {} wins!",
                             )),
                         )
                         .await?;
-                    create_response(&ctx.http, command, &resp).await;
+                    create_response(&ctx.http, command, &resp, true).await;
                     Ok(())
                 })
             })),
@@ -75,7 +80,7 @@ The post with the most total reactions by {} wins!",
         .add_option(crate::command::Option::new(
             "channel",
             "The channel which is to be used for memes.",
-            OptionType::Channel(Some(&[ChannelType::Text])),
+            OptionType::Channel(Some(vec![ChannelType::Text])),
             true,
         )),
     )
@@ -97,7 +102,7 @@ The post with the most total reactions by {} wins!",
                 config.save();
                 drop(data);
                 let resp = "Memes channel unset.".to_string();
-                create_response(&ctx.http, command, &resp).await;
+                create_response(&ctx.http, command, &resp, true).await;
                 if let Some(channel) = channel {
                     if let Some(channel) = channel.to_channel(&ctx.http).await?.guild() {
                         channel
@@ -145,6 +150,13 @@ pub async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
                             finished = messages.is_empty();
                         }
                         Err(e) => {
+                            notify_subscribers(
+                                &ctx,
+                                Event::Error,
+                                format!("Error retrieving missed messages in {}: {e:?}", g.id)
+                                    .as_str(),
+                            )
+                            .await;
                             error!("Error retrieving missed messages in {}: {e:?}", g.id)
                         }
                     };
@@ -305,19 +317,26 @@ You've got until {}.",
 }
 
 pub async fn message(ctx: &Context, message: &Message) {
-    let mut data = ctx.data.write().await;
-    let config = data.get_mut::<Config>().unwrap();
-    let guild = config.guild_mut(&message.guild_id.unwrap());
-    if let Some(memes) = guild.memes_mut() {
-        if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
-            if !memes.has_reacted()
-                && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                && message.react(&ctx.http, REACTION_EMOTE).await.is_ok()
-            {
-                memes.reacted();
+    if let Some(flags) = message.flags {
+        if flags.contains(MessageFlags::EPHEMERAL) {
+            return;
+        }
+    }
+    if let Some(guild) = message.guild_id {
+        let mut data = ctx.data.write().await;
+        let config = data.get_mut::<Config>().unwrap();
+        let guild = config.guild_mut(&guild);
+        if let Some(memes) = guild.memes_mut() {
+            if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
+                if !memes.has_reacted()
+                    && rand::thread_rng().gen_bool(REACTION_CHANCE)
+                    && message.react(&ctx.http, REACTION_EMOTE).await.is_ok()
+                {
+                    memes.reacted();
+                }
+                memes.add(message.id);
+                config.save()
             }
-            memes.add(message.id);
-            config.save()
         }
     }
 }
