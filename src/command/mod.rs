@@ -253,7 +253,7 @@ pub enum OptionType {
     /// Limited to ([0..6000], [1..6000])
     StringInput(std::option::Option<u16>, std::option::Option<u16>),
     /// A String input based on the given options.
-    StringSelect(ArrayVec<[String; 25]>),
+    StringSelect(Box<ArrayVec<[String; 25]>>),
     /// An integer input, optionally limited to a specific range.
     /// Note that integers must be between -2^53 and 2^53.
     IntegerInput(std::option::Option<i64>, std::option::Option<i64>),

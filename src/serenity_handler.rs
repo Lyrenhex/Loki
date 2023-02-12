@@ -45,8 +45,6 @@ I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
             .as_str(),
         )
         .await;
-
-        notify_subscribers(&ctx, Event::Error, "test error!").await;
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {

@@ -45,10 +45,12 @@ impl FromStr for Event {
 }
 
 pub fn generate_command() -> Command<'static> {
-    let options = EVENTS
-        .iter()
-        .map(|e| e.to_string())
-        .collect::<ArrayVec<[String; 25]>>();
+    let options = Box::new(
+        EVENTS
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<ArrayVec<[String; 25]>>(),
+    );
 
     Command::new(
         "events",
