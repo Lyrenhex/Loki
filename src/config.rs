@@ -41,6 +41,7 @@ pub struct Config {
     /// Using a [String] here as [toml] has issues deserialising this to
     /// anything else, for some reason?
     guilds: Option<HashMap<String, Guild>>,
+    subscribers: Option<HashMap<crate::subsystems::events::Event, Vec<UserId>>>,
 }
 
 impl Config {
@@ -58,6 +59,9 @@ impl Config {
         let mut config: Self = toml::from_str(&config).unwrap();
         if config.guilds.is_none() {
             config.guilds = Some(HashMap::new());
+        }
+        if config.subscribers.is_none() {
+            config.subscribers = Some(HashMap::new());
         }
         config
     }

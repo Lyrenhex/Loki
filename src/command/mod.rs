@@ -1,7 +1,5 @@
-mod set_status_meaning;
 mod util;
 
-pub use set_status_meaning::set_status_meaning;
 pub use util::*;
 
 use std::pin::Pin;
@@ -10,7 +8,7 @@ use serenity::{
     model::{
         prelude::{
             command::CommandOptionType,
-            interaction::application_command::ApplicationCommandInteraction,
+            interaction::application_command::ApplicationCommandInteraction, ChannelType,
         },
         Permissions,
     },
@@ -18,6 +16,9 @@ use serenity::{
 };
 
 use crate::Error;
+
+const MIN_NUM: i64 = -(MAX_NUM);
+const MAX_NUM: i64 = 1 << 54;
 
 type ActionRoutine = Box<
     dyn (for<'b> Fn(
@@ -140,30 +141,92 @@ impl<'a> Command<'a> {
 pub struct Option<'a> {
     name: &'a str,
     description: &'a str,
-    kind: CommandOptionType,
+    kind: OptionType<'a>,
     required: bool,
 }
 
 impl<'a> Option<'a> {
-    pub fn new(
-        name: &'a str,
-        description: &'a str,
-        kind: CommandOptionType,
-        required: bool,
-    ) -> Result<Self, crate::Error> {
-        if kind == CommandOptionType::SubCommand
-            || kind == CommandOptionType::SubCommandGroup
-            || kind == CommandOptionType::Unknown
-        {
-            panic!("Invalid command option type: {:?}", kind);
+    pub fn new(name: &'a str, description: &'a str, kind: OptionType<'a>, required: bool) -> Self {
+        match kind {
+            OptionType::StringInput(min, max) => {
+                if let Some(min) = min {
+                    if min > 6000 {
+                        panic!("StringInput minimum value above 6000: {min}");
+                    }
+                }
+                if let Some(max) = max {
+                    if max < 1 || max > 6000 {
+                        panic!("StringInput maximum value out of bounds (should be between 1 and 6000): {max}");
+                    }
+                }
+            }
+            OptionType::StringSelect(options) => {
+                if options.len() == 0 {
+                    panic!("No choices for StringSelect!");
+                }
+                if options.len() > 25 {
+                    panic!("More than 25 choices for StringSelect: {:?}", options);
+                }
+            }
+            OptionType::IntegerInput(min, max) => {
+                if let Some(min) = min {
+                    if min < MIN_NUM {
+                        panic!("Integer minimum value below -2^53: {min}");
+                    }
+                }
+                if let Some(max) = max {
+                    if max > MAX_NUM {
+                        panic!("Integer maximum value above -2^53: {max}");
+                    }
+                }
+            }
+            OptionType::IntegerSelect(options) => {
+                if options.len() == 0 {
+                    panic!("No choices for IntegerSelect!");
+                }
+                if options.len() > 25 {
+                    panic!("More than 25 choices for IntegerSelect: {:?}", options);
+                }
+                options
+                    .iter()
+                    .for_each(|x| assert!(x >= &MIN_NUM && x <= &MAX_NUM));
+            }
+            OptionType::NumberInput(min, max) => {
+                if let Some(min) = min {
+                    if min < MIN_NUM as f64 {
+                        panic!("Number minimum value below -2^53: {min}");
+                    }
+                }
+                if let Some(max) = max {
+                    if max > MAX_NUM as f64 {
+                        panic!("Number maximum value above -2^53: {max}");
+                    }
+                }
+            }
+            OptionType::NumberSelect(options) => {
+                if options.len() == 0 {
+                    panic!("No choices for IntegerSelect!");
+                }
+                if options.len() > 25 {
+                    panic!("More than 25 choices for IntegerSelect: {:?}", options);
+                }
+                options
+                    .iter()
+                    .for_each(|x| assert!(x >= &(MIN_NUM as f64) && x <= &(MAX_NUM as f64)));
+            }
+            OptionType::Boolean
+            | OptionType::User
+            | OptionType::Channel(_)
+            | OptionType::Role
+            | OptionType::Mentionable
+            | OptionType::Attachment => {}
         }
-
-        Ok(Self {
+        Self {
             name,
             description,
             kind,
             required,
-        })
+        }
     }
 
     pub fn name(&self) -> &'a str {
@@ -174,11 +237,57 @@ impl<'a> Option<'a> {
         self.description
     }
 
-    pub fn kind(&self) -> CommandOptionType {
+    pub fn kind(&self) -> OptionType<'a> {
         self.kind
     }
 
     pub fn required(&self) -> bool {
         self.required
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum OptionType<'a> {
+    /// A String input based on the given range (min, max).
+    /// Limited to ([0..6000], [1..6000])
+    StringInput(std::option::Option<u16>, std::option::Option<u16>),
+    /// A String input based on the given options.
+    StringSelect(&'a [&'a str]),
+    /// An integer input, optionally limited to a specific range.
+    /// Note that integers must be between -2^53 and 2^53.
+    IntegerInput(std::option::Option<i64>, std::option::Option<i64>),
+    /// An integer select.
+    /// Note that integers must be between -2^53 and 2^53.
+    IntegerSelect(&'a [i64]),
+    Boolean,
+    User,
+    Channel(std::option::Option<&'a [ChannelType]>),
+    Role,
+    Mentionable,
+    /// A double input, optionally limited to a specific range.
+    /// Note that numbers must be between -2^53 and 2^53.
+    NumberInput(std::option::Option<f64>, std::option::Option<f64>),
+    /// A number (double) selection.
+    /// Note that numbers must be between -2^53 and 2^53.
+    NumberSelect(&'a [f64]),
+    Attachment,
+}
+
+impl From<OptionType<'_>> for CommandOptionType {
+    fn from(ot: OptionType) -> Self {
+        match ot {
+            OptionType::StringInput(_, _) => CommandOptionType::String,
+            OptionType::StringSelect(_) => CommandOptionType::String,
+            OptionType::IntegerInput(_, _) => CommandOptionType::Integer,
+            OptionType::IntegerSelect(_) => CommandOptionType::Integer,
+            OptionType::Boolean => CommandOptionType::Boolean,
+            OptionType::User => CommandOptionType::User,
+            OptionType::Channel(_) => CommandOptionType::Channel,
+            OptionType::Role => CommandOptionType::Role,
+            OptionType::Mentionable => CommandOptionType::Mentionable,
+            OptionType::NumberInput(_, _) => CommandOptionType::Number,
+            OptionType::NumberSelect(_) => CommandOptionType::Number,
+            OptionType::Attachment => CommandOptionType::Attachment,
+        }
     }
 }

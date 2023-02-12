@@ -1,3 +1,5 @@
+use crate::command::OptionType;
+use crate::subsystems;
 use log::{error, info};
 use serenity::model::prelude::GuildId;
 use serenity::{
@@ -5,18 +7,14 @@ use serenity::{
     model::prelude::{
         command::{Command, CommandOptionType},
         interaction::Interaction,
-        Activity, ActivityType, Guild, Message, Presence, Ready,
+        Activity, Guild, Message, Presence, Ready,
     },
     prelude::{Context, EventHandler},
 };
 
-use crate::config::Config;
-
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
-
-const STREAMING_PREFIX: &str = "🔴 ";
 
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
@@ -35,11 +33,9 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
-        let ctx = crate::subsystems::Memes::catch_up_messages(ctx, &g).await;
+        let ctx = subsystems::memes::catch_up_messages(ctx, &g).await;
 
-        tokio::spawn(crate::subsystems::Memes::init(ctx, g))
-            .await
-            .unwrap();
+        tokio::spawn(subsystems::memes::init(ctx, g)).await.unwrap();
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -69,61 +65,12 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn message(&self, ctx: Context, message: Message) {
-        crate::subsystems::Memes::message(&ctx, &message).await;
+        subsystems::memes::message(&ctx, &message).await;
     }
 
     async fn presence_update(&self, ctx: Context, new_data: Presence) {
         info!("Handling Presence update for {}...", new_data.user.id);
-        let data = ctx.data.read().await;
-        let config = data.get::<Config>().unwrap();
-        if new_data
-            .activities
-            .iter()
-            .any(|a| a.kind == ActivityType::Streaming)
-        {
-            if let Some(user) = new_data.user.to_user() {
-                for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
-                    let nick = user
-                        .nick_in(&ctx.http, guild)
-                        .await
-                        .unwrap_or(user.name.clone());
-                    if !nick.starts_with(STREAMING_PREFIX) {
-                        // the user is streaming, but they aren't marked as such.
-                        let old_nick = nick.clone();
-                        let nick = STREAMING_PREFIX.to_owned()
-                            + &nick.chars().take(30).collect::<String>();
-                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
-                            if let Err(e) = guild
-                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
-                                .await
-                            {
-                                error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
-                            }
-                        }
-                    }
-                }
-            }
-        } else if let Some(user) = new_data.user.to_user() {
-            for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
-                let nick = user.nick_in(&ctx.http, guild).await;
-                if let Some(nick) = nick {
-                    if nick.starts_with(STREAMING_PREFIX) {
-                        // the user isn't streaming any more, but they are still marked as such.
-                        let old_nick = nick.clone();
-                        let nick = nick.chars().skip(2).collect::<String>();
-                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
-                            if let Err(e) = guild
-                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
-                                .await
-                            {
-                                error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        drop(data);
+        subsystems::stream_indicator::presence(&ctx, &new_data).await;
     }
 }
 
@@ -137,6 +84,66 @@ impl<'a> SerenityHandler<'a> {
         macro_rules! command_constructor {
             () => {
                 |mut commands| {
+                    macro_rules! build_opt {
+                        ($opt:ident) => {
+                            |option| {
+                                option
+                                    .name($opt.name())
+                                    .description($opt.description())
+                                    .kind($opt.kind().into())
+                                    .required($opt.required());
+                                match $opt.kind() {
+                                    OptionType::StringInput(min, max) => {
+                                        if let Some(min) = min {
+                                            option.min_length(min);
+                                        }
+                                        if let Some(max) = max {
+                                            option.max_length(max);
+                                        }
+                                    }
+                                    OptionType::StringSelect(options) => {
+                                        options.iter().for_each(|s| {
+                                            option.add_string_choice(s, s);
+                                        });
+                                    }
+                                    OptionType::IntegerInput(min, max) => {
+                                        if let Some(min) = min {
+                                            option.min_int_value(min);
+                                        }
+                                        if let Some(max) = max {
+                                            option.max_int_value(max);
+                                        }
+                                    }
+                                    OptionType::IntegerSelect(options) => {
+                                        options.iter().for_each(|s| {
+                                            option.add_int_choice(s, *s as i32);
+                                        });
+                                    }
+                                    OptionType::NumberInput(min, max) => {
+                                        if let Some(min) = min {
+                                            option.min_number_value(min);
+                                        }
+                                        if let Some(max) = max {
+                                            option.max_number_value(max);
+                                        }
+                                    }
+                                    OptionType::NumberSelect(options) => {
+                                        options.iter().for_each(|s| {
+                                            option.add_number_choice(s, *s);
+                                        });
+                                    }
+                                    OptionType::Boolean
+                                    | OptionType::User
+                                    | OptionType::Channel(_)
+                                    | OptionType::Role
+                                    | OptionType::Mentionable
+                                    | OptionType::Attachment => {}
+                                }
+                                option
+                            }
+                        };
+                    }
+
                     for cmd in self.commands.iter() {
                         commands = commands.create_application_command(|command| {
                             let mut command = command
@@ -158,25 +165,13 @@ impl<'a> SerenityHandler<'a> {
                                         .kind(CommandOptionType::SubCommand)
                                         .required(false);
                                     for opt in variant.options() {
-                                        subcmd = subcmd.create_sub_option(|option| {
-                                            option
-                                                .name(opt.name())
-                                                .description(opt.description())
-                                                .kind(opt.kind())
-                                                .required(opt.required())
-                                        })
+                                        subcmd = subcmd.create_sub_option(build_opt!(opt))
                                     }
                                     subcmd
                                 })
                             }
                             for opt in cmd.options() {
-                                command = command.create_option(|option| {
-                                    option
-                                        .name(opt.name())
-                                        .description(opt.description())
-                                        .kind(opt.kind())
-                                        .required(opt.required())
-                                })
+                                command = command.create_option(build_opt!(opt))
                             }
                             command
                         })
