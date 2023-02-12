@@ -155,13 +155,13 @@ impl<'a> Option<'a> {
                     }
                 }
                 if let Some(max) = max {
-                    if max < 1 || max > 6000 {
+                    if !(1..=6000).contains(&max) {
                         panic!("StringInput maximum value out of bounds (should be between 1 and 6000): {max}");
                     }
                 }
             }
             OptionType::StringSelect(options) => {
-                if options.len() == 0 {
+                if options.is_empty() {
                     panic!("No choices for StringSelect!");
                 }
                 if options.len() > 25 {
@@ -181,7 +181,7 @@ impl<'a> Option<'a> {
                 }
             }
             OptionType::IntegerSelect(options) => {
-                if options.len() == 0 {
+                if options.is_empty() {
                     panic!("No choices for IntegerSelect!");
                 }
                 if options.len() > 25 {
@@ -189,7 +189,7 @@ impl<'a> Option<'a> {
                 }
                 options
                     .iter()
-                    .for_each(|x| assert!(x >= &MIN_NUM && x <= &MAX_NUM));
+                    .for_each(|x| assert!((&MIN_NUM..&MAX_NUM).contains(&x)));
             }
             OptionType::NumberInput(min, max) => {
                 if let Some(min) = min {
@@ -204,7 +204,7 @@ impl<'a> Option<'a> {
                 }
             }
             OptionType::NumberSelect(options) => {
-                if options.len() == 0 {
+                if options.is_empty() {
                     panic!("No choices for IntegerSelect!");
                 }
                 if options.len() > 25 {

@@ -132,9 +132,13 @@ impl<'a> SerenityHandler<'a> {
                                             option.add_number_choice(s, *s);
                                         });
                                     }
+                                    OptionType::Channel(types) => {
+                                        if let Some(types) = types {
+                                            option.channel_types(types);
+                                        }
+                                    }
                                     OptionType::Boolean
                                     | OptionType::User
-                                    | OptionType::Channel(_)
                                     | OptionType::Role
                                     | OptionType::Mentionable
                                     | OptionType::Attachment => {}
