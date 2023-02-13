@@ -2,6 +2,7 @@ use crate::command::{notify_subscribers, OptionType};
 use crate::subsystems;
 use crate::subsystems::events::Event;
 use log::{error, info};
+#[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::{
     async_trait,
