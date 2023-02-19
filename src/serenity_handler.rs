@@ -34,24 +34,12 @@ impl EventHandler for SerenityHandler<'_> {
         // creates the global application commands
         self.create_commands(&ctx).await;
 
-        notify_subscribers(
-            &ctx,
-            Event::Startup,
-            format!(
-                "**Hey!**
-I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
-                crate::VERSION,
-                crate::GITHUB_URL,
-                crate::VERSION,
-            )
-            .as_str(),
-        )
-        .await;
+        for s in subsystems() {
+            s.ready(&ctx, &ready).await;
+        }
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
-        let ctx = subsystems::memes::catch_up_messages(ctx, &g).await;
-
         let mut data = ctx.data.write().await;
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
@@ -60,9 +48,9 @@ I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
         drop(data);
         if !started {
             // start long-running threads for this guild.
-            tokio::spawn(subsystems::memes::init(ctx.clone(), g.clone()))
-                .await
-                .unwrap();
+            for s in subsystems() {
+                s.guild_init(ctx.clone(), g.clone()).await;
+            }
         }
     }
 
@@ -108,12 +96,16 @@ I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
     }
 
     async fn message(&self, ctx: Context, message: Message) {
-        subsystems::memes::message(&ctx, &message).await;
+        for s in subsystems() {
+            s.message(&ctx, &message).await;
+        }
     }
 
     async fn presence_update(&self, ctx: Context, new_data: Presence) {
-        info!("Handling Presence update for {}...", new_data.user.id);
-        subsystems::stream_indicator::presence(&ctx, &new_data).await;
+        info!("Handling Presence updates for {}...", new_data.user.id);
+        for s in subsystems() {
+            s.presence(&ctx, &new_data).await;
+        }
     }
 }
 
