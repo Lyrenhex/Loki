@@ -38,8 +38,9 @@ and compares to the same list for GT7. Output in number of pages.
 - [ ] Monitoring system for timeouts
   - Track aggregate data about how many times a user has been timed
     out, and the total time they have been timed out for.
-
-Eventually roll [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver)'s behaviour into Loki.
+- [x] Revive threads when they get archived.
+  - This requires `MANAGE_THREADS` permission.
+  - This is (and supersedes) [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver).
 
 ## Getting started
 

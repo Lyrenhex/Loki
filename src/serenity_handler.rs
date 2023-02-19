@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::subsystems;
 use crate::subsystems::events::Event;
 use log::{error, info};
+use serenity::model::prelude::GuildChannel;
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::{
@@ -14,6 +15,7 @@ use serenity::{
     },
     prelude::{Context, EventHandler},
 };
+use tokio::join;
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
@@ -48,9 +50,10 @@ impl EventHandler for SerenityHandler<'_> {
         drop(data);
         if !started {
             // start long-running threads for this guild.
-            for s in subsystems() {
-                s.guild_init(ctx.clone(), g.clone()).await;
-            }
+            join!(
+                subsystems::memes::Memes::guild_init(ctx.clone(), g.clone()),
+                subsystems::thread_reviver::ThreadReviver::guild_init(ctx.clone(), g.clone())
+            );
         }
     }
 
@@ -105,6 +108,12 @@ impl EventHandler for SerenityHandler<'_> {
         info!("Handling Presence updates for {}...", new_data.user.id);
         for s in subsystems() {
             s.presence(&ctx, &new_data).await;
+        }
+    }
+
+    async fn thread_update(&self, ctx: Context, thread: GuildChannel) {
+        for s in subsystems() {
+            s.thread(&ctx, &thread).await;
         }
     }
 }
