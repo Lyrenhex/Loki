@@ -153,6 +153,8 @@ struct Tokens {
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct Guild {
+    #[serde(skip)]
+    threads_started: bool,
     trigger_map: Option<HashMap<String, String>>,
     memes: Option<Memes>,
 }
@@ -180,6 +182,14 @@ impl Guild {
         } else {
             None
         }
+    }
+
+    pub fn threads_started(&self) -> bool {
+        self.threads_started
+    }
+
+    pub fn set_threads_started(&mut self) {
+        self.threads_started = true;
     }
 }
 
