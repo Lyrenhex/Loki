@@ -1,4 +1,5 @@
 use crate::command::{notify_subscribers, OptionType};
+use crate::config::Config;
 use crate::subsystems;
 use crate::subsystems::events::Event;
 use log::{error, info};
@@ -51,7 +52,18 @@ I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
         let ctx = subsystems::memes::catch_up_messages(ctx, &g).await;
 
-        tokio::spawn(subsystems::memes::init(ctx, g)).await.unwrap();
+        let mut data = ctx.data.write().await;
+        let config = data.get_mut::<Config>().unwrap();
+        let guild = config.guild_mut(&g.id);
+        let started = guild.threads_started();
+        guild.set_threads_started();
+        drop(data);
+        if !started {
+            // start long-running threads for this guild.
+            tokio::spawn(subsystems::memes::init(ctx.clone(), g.clone()))
+                .await
+                .unwrap();
+        }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
