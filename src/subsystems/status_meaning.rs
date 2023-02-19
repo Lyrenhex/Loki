@@ -1,4 +1,5 @@
 use serenity::futures::StreamExt;
+use serenity::prelude::Mentionable;
 
 use crate::config::Config;
 
@@ -15,7 +16,7 @@ pub fn set() -> Command<'static> {
                 let config = data.get::<Config>().unwrap();
                 let manager = config.get_manager().to_user(&ctx.http).await?;
                 if command.user != manager {
-                    let resp = format!("**Unauthorised:** You're not {}!", manager.tag());
+                    let resp = format!("**Unauthorised:** You're not {}!", manager.mention());
                     create_response(&ctx.http, command, &resp, true).await;
                     return Ok(());
                 }
