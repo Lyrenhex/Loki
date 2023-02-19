@@ -132,12 +132,6 @@ I won't see them anymore. :("
         ))]
     }
 
-    async fn guild_init(&self, ctx: Context, g: Guild) {
-        let ctx = Self::catch_up_messages(ctx.clone(), &g).await;
-
-        tokio::spawn(Self::init(ctx, g)).await.unwrap();
-    }
-
     async fn message(&self, ctx: &Context, message: &Message) {
         if let Some(flags) = message.flags {
             if flags.contains(MessageFlags::EPHEMERAL) {
@@ -215,7 +209,9 @@ impl Memes {
         ctx
     }
 
-    async fn init(ctx: Context, g: Guild) {
+    pub async fn guild_init(ctx: Context, g: Guild) {
+        let ctx = Self::catch_up_messages(ctx, &g).await;
+
         loop {
             let data = ctx.data.read().await;
             if let Some(memes) = get_memes(&data, &g.id) {
