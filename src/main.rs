@@ -14,6 +14,7 @@ use command::Command;
 use config::Config;
 pub use error::Error;
 use serenity_handler::SerenityHandler;
+pub use subsystems::subsystems;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
 const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y";
@@ -64,45 +65,44 @@ async fn main() {
 }
 
 fn generate_commands() -> Vec<Command<'static>> {
-    vec![
-        Command::new(
-            "about",
-            "Provides information about Loki.",
-            command::PermissionType::Universal,
-            Some(Box::new(move |ctx, command| {
-                Box::pin(async {
-                    let manager_tag = ctx
-                        .data
-                        .read()
-                        .await
-                        .get::<Config>()
-                        .unwrap()
-                        .get_manager()
-                        .to_user(&ctx.http)
-                        .await?
-                        .mention();
-                    command::create_response(
-                        &ctx.http,
-                        command,
-                        &format!(
-                            "Loki is a trickster ~~god~~ bot.
+    let mut commands = vec![Command::new(
+        "about",
+        "Provides information about Loki.",
+        command::PermissionType::Universal,
+        Some(Box::new(move |ctx, command| {
+            Box::pin(async {
+                let manager_tag = ctx
+                    .data
+                    .read()
+                    .await
+                    .get::<Config>()
+                    .unwrap()
+                    .get_manager()
+                    .to_user(&ctx.http)
+                    .await?
+                    .mention();
+                command::create_response(
+                    &ctx.http,
+                    command,
+                    &format!(
+                        "Loki is a trickster ~~god~~ bot.
 Version [{VERSION}]({GITHUB_URL}/releases/tag/v{VERSION}); [source code]({GITHUB_URL}).
 
 This instance of Loki is managed by {manager_tag}.
 
 Current features:
 {FEATURES}"
-                        ),
-                        false,
-                    )
-                    .await;
-                    Ok(())
-                })
-            })),
-        ),
-        subsystems::status_meaning::get(),
-        subsystems::status_meaning::set(),
-        subsystems::memes::generate_command(),
-        subsystems::events::generate_command(),
-    ]
+                    ),
+                    false,
+                )
+                .await;
+                Ok(())
+            })
+        })),
+    )];
+    subsystems()
+        .iter()
+        .for_each(|s| commands.append(&mut s.generate_commands()));
+
+    commands
 }
