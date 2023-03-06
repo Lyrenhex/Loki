@@ -278,25 +278,27 @@ Two days left! Perhaps time to post some?",
                         let mut most_reactions = 0;
                         let mut victor: Option<Message> = None;
                         let mut reacted = memes.has_reacted();
-                        for meme in memes.list() {
+                        let meme_list = memes.reset();
+                        for meme in meme_list {
                             if let Ok(meme) = channel.message(&ctx.http, meme).await {
-                                if !reacted
-                                    && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                                    && meme.react(&ctx.http, REACTION_EMOTE).await.is_ok()
-                                {
-                                    reacted = true;
-                                }
-                                let total_reactions: u64 =
-                                    meme.reactions.iter().map(|m| m.count).sum();
-                                if total_reactions > most_reactions {
-                                    most_reactions = total_reactions;
-                                    victor = Some(meme);
+                                if !meme.is_own(&ctx.cache) {
+                                    if !reacted
+                                        && rand::thread_rng().gen_bool(REACTION_CHANCE)
+                                        && meme.react(&ctx.http, REACTION_EMOTE).await.is_ok()
+                                    {
+                                        reacted = true;
+                                    }
+                                    let total_reactions: u64 =
+                                        meme.reactions.iter().map(|m| m.count).sum();
+                                    if total_reactions > most_reactions {
+                                        most_reactions = total_reactions;
+                                        victor = Some(meme);
+                                    }
                                 }
                             }
                         }
 
-                        memes.reset();
-                        if let Some(victor) = victor {
+                        let initial_message = if let Some(victor) = victor {
                             channel
                                 .send_message(
                                     &ctx.http,
@@ -317,7 +319,7 @@ You've got until {}.",
                                     )),
                                 )
                                 .await
-                                .unwrap();
+                                .unwrap()
                         } else {
                             channel
                                 .send_message(
@@ -333,8 +335,9 @@ You've got until {}.",
                                     )),
                                 )
                                 .await
-                                .unwrap();
-                        }
+                                .unwrap()
+                        };
+                        memes.add(initial_message.id);
                         config.save();
                     }
                 }

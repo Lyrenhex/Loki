@@ -223,10 +223,12 @@ impl Memes {
         self.last_reset.checked_add_days(Days::new(7)).unwrap()
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> Vec<MessageId> {
         self.last_reset = Utc::now();
-        self.memes_list.clear();
         self.reacted = false;
+        let memes_list = self.memes_list.clone();
+        self.memes_list.clear();
+        memes_list
     }
 
     pub fn channel(&self) -> ChannelId {
