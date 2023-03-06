@@ -12,11 +12,12 @@ use crate::{
 
 use super::Subsystem;
 
-const EVENTS: [Event; 2] = [Event::Startup, Event::Error];
+const EVENTS: [Event; 3] = [Event::Startup, Event::Stream, Event::Error];
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Event {
     Startup,
+    Stream,
     Error,
 }
 
@@ -27,6 +28,7 @@ impl Display for Event {
             "{}",
             match self {
                 Self::Startup => "Startup",
+                Self::Stream => "Streaming",
                 Self::Error => "Error",
             }
         )
@@ -37,12 +39,12 @@ impl FromStr for Event {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Startup" => Ok(Self::Startup),
-            "Error" => Ok(Self::Error),
-            _ => Err(Error::InvalidEvent(format!(
+        if let Some(event) = EVENTS.iter().find(|e| e.to_string() == s) {
+            Ok(*event)
+        } else {
+            Err(Error::InvalidEvent(format!(
                 "Unknown string representation of Event: {s}"
-            ))),
+            )))
         }
     }
 }

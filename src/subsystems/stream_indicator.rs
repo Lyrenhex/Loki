@@ -5,7 +5,7 @@ use serenity::{
     prelude::Context,
 };
 
-use crate::config::Config;
+use crate::{command::notify_subscribers, config::Config};
 
 use super::Subsystem;
 
@@ -22,10 +22,10 @@ impl Subsystem for StreamIndicator {
     async fn presence(&self, ctx: &Context, new_data: &Presence) {
         let data = ctx.data.read().await;
         let config = data.get::<Config>().unwrap();
-        if new_data
+        if let Some(activity) = new_data
             .activities
             .iter()
-            .any(|a| a.kind == ActivityType::Streaming)
+            .find(|a| a.kind == ActivityType::Streaming)
         {
             if let Some(user) = new_data.user.to_user() {
                 for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
@@ -35,6 +35,21 @@ impl Subsystem for StreamIndicator {
                         .unwrap_or(user.name.clone());
                     if !nick.starts_with(STREAMING_PREFIX) {
                         // the user is streaming, but they aren't marked as such.
+                        // first, notify subscribers that someone's live!
+                        notify_subscribers(
+                            ctx,
+                            super::events::Event::Stream,
+                            format!(
+                                "**{} is now live!**",
+                                if let Some(url) = &activity.url {
+                                    format!("[{}]({})", &nick, url)
+                                } else {
+                                    nick.clone()
+                                },
+                            )
+                            .as_str(),
+                        )
+                        .await;
                         let old_nick = nick.clone();
                         let nick = STREAMING_PREFIX.to_owned()
                             + &nick.chars().take(30).collect::<String>();

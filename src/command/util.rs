@@ -83,7 +83,15 @@ pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
             match subscriber.to_user(&ctx.http).await {
                 Ok(u) => {
                     if let Err(e) = u
-                        .direct_message(&ctx.http, create_embed(message.to_string()))
+                        .direct_message(
+                            &ctx.http,
+                            create_embed(format!(
+                                "{message}
+
+_You're receiving this message because you're subscribed to the \
+`{event}` event._"
+                            )),
+                        )
                         .await
                     {
                         error!("Could not DM user {subscriber} ({}): {e:?}", u.tag());

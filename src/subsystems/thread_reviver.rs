@@ -90,7 +90,7 @@ impl ThreadReviver {
             }
         }
         // print any errors we encountered in a reasonably nicely formatted way, to help with diagnosing either actual code issues or Discord permission issues.
-        if channel_errors.len() > 0 {
+        if !channel_errors.is_empty() {
             let mut err = format!("Errors retrieving threads in guild {}\n", g.id);
             for error in channel_errors.keys() {
                 err += format!("\t{}:\n", error).as_str();
