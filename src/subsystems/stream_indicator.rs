@@ -28,6 +28,7 @@ impl Subsystem for StreamIndicator {
             .find(|a| a.kind == ActivityType::Streaming)
         {
             if let Some(user) = new_data.user.to_user() {
+                let mut notify = false;
                 for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
                     let nick = user
                         .nick_in(&ctx.http, guild)
@@ -35,21 +36,8 @@ impl Subsystem for StreamIndicator {
                         .unwrap_or(user.name.clone());
                     if !nick.starts_with(STREAMING_PREFIX) {
                         // the user is streaming, but they aren't marked as such.
-                        // first, notify subscribers that someone's live!
-                        notify_subscribers(
-                            ctx,
-                            super::events::Event::Stream,
-                            format!(
-                                "**{} is now live!**",
-                                if let Some(url) = &activity.url {
-                                    format!("[{}]({})", &nick, url)
-                                } else {
-                                    nick.clone()
-                                },
-                            )
-                            .as_str(),
-                        )
-                        .await;
+                        // notify subscribers that someone's live!
+                        notify = true;
                         let old_nick = nick.clone();
                         let nick = STREAMING_PREFIX.to_owned()
                             + &nick.chars().take(30).collect::<String>();
@@ -62,6 +50,22 @@ impl Subsystem for StreamIndicator {
                             }
                         }
                     }
+                }
+                if notify {
+                    notify_subscribers(
+                        ctx,
+                        super::events::Event::Stream,
+                        format!(
+                            "**{} is now live!**",
+                            if let Some(url) = &activity.url {
+                                format!("[{}]({})", &user.name, url)
+                            } else {
+                                user.name
+                            },
+                        )
+                        .as_str(),
+                    )
+                    .await;
                 }
             }
         } else if let Some(user) = new_data.user.to_user() {
