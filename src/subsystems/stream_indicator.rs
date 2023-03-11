@@ -51,6 +51,7 @@ impl Subsystem for StreamIndicator {
                         }
                     }
                 }
+                drop(data);
                 if notify {
                     notify_subscribers(
                         ctx,
