@@ -126,9 +126,9 @@ Perhaps try adding some?".to_string(), true).await;
                                 let guild = config.guild_mut(&guild_id);
                                 let response_map = guild.response_map_mut();
                                 if !it.value.is_empty() {
-                                    response_map.insert(activation_phrase.to_string(), it.value.clone());
+                                    response_map.insert(activation_phrase.to_string().to_lowercase(), it.value.clone());
                                 } else {
-                                    response_map.remove(activation_phrase);
+                                    response_map.remove(&activation_phrase.to_lowercase());
                                 }
                                 config.save();
                             }
@@ -164,7 +164,7 @@ Perhaps try adding some?".to_string(), true).await;
             if let Some(guild) = crate::config::get_guild(&data, &guild) {
                 if let Some(response_map) = guild.response_map() {
                     for (activator, response) in response_map {
-                        if message.content.contains(activator) {
+                        if message.content.to_lowercase().contains(activator) {
                             if let Ok(channel) = message.channel(&ctx.http).await {
                                 if let Some(channel) = channel.guild() {
                                     if let Err(e) = channel
