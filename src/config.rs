@@ -155,7 +155,7 @@ struct Tokens {
 pub struct Guild {
     #[serde(skip)]
     threads_started: bool,
-    trigger_map: Option<HashMap<String, String>>,
+    response_map: Option<HashMap<String, String>>,
     memes: Option<Memes>,
 }
 
@@ -190,6 +190,17 @@ impl Guild {
 
     pub fn set_threads_started(&mut self) {
         self.threads_started = true;
+    }
+
+    pub fn response_map_mut(&mut self) -> &mut HashMap<String, String> {
+        if self.response_map.is_none() {
+            self.response_map = Some(HashMap::new());
+        }
+        self.response_map.as_mut().unwrap()
+    }
+
+    pub fn response_map(&self) -> &Option<HashMap<String, String>> {
+        &self.response_map
     }
 }
 

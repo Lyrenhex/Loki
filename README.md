@@ -48,6 +48,7 @@ and compares to the same list for GT7. Output in number of pages.
 
 The bot requires the following privileged Gateway Intents:
 - `GUILD_PRESENCES`
+- `MESSAGE_CONTENT`
 
 ### Configuration
 
