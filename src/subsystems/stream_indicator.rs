@@ -28,16 +28,13 @@ impl Subsystem for StreamIndicator {
             .find(|a| a.kind == ActivityType::Streaming)
         {
             if let Some(user) = new_data.user.to_user() {
-                let mut notify = false;
+                let mut notify = true;
                 for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
                     let nick = user
                         .nick_in(&ctx.http, guild)
                         .await
                         .unwrap_or(user.name.clone());
                     if !nick.starts_with(STREAMING_PREFIX) {
-                        // the user is streaming, but they aren't marked as such.
-                        // notify subscribers that someone's live!
-                        notify = true;
                         let old_nick = nick.clone();
                         let nick = STREAMING_PREFIX.to_owned()
                             + &nick.chars().take(30).collect::<String>();
@@ -49,6 +46,11 @@ impl Subsystem for StreamIndicator {
                                 error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
                             }
                         }
+                    } else {
+                        // we've already set the prefix - don't spam users, in
+                        // case another we don't have permission to set the
+                        // prefix in another server!
+                        notify = false;
                     }
                 }
                 drop(data);

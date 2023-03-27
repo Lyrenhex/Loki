@@ -77,7 +77,9 @@ impl Subsystem for Memes {
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
-                                    reset_time.format(crate::DATE_FMT),
+                                    reset_time
+                                        .with_timezone(&chrono::Local)
+                                        .format(crate::DATE_FMT),
                                 )),
                             )
                             .await?;
@@ -315,7 +317,10 @@ week you'll win? 😉
 You've got until {}.",
                                         victor.author.mention(),
                                         victor.link(),
-                                        memes.next_reset().format(crate::DATE_FMT),
+                                        memes
+                                            .next_reset()
+                                            .with_timezone(&chrono::Local)
+                                            .format(crate::DATE_FMT),
                                     )),
                                 )
                                 .await
@@ -331,7 +336,10 @@ There weren't any votes (reactions), so there's no winner. Sadge.
 I've reset the entries, so can you, like, _do something_ this week?
 
 You've got until {}.",
-                                        memes.next_reset().format(crate::DATE_FMT)
+                                        memes
+                                            .next_reset()
+                                            .with_timezone(&chrono::Local)
+                                            .format(crate::DATE_FMT)
                                     )),
                                 )
                                 .await

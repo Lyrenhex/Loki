@@ -17,7 +17,7 @@ use serenity_handler::SerenityHandler;
 pub use subsystems::subsystems;
 
 const COLOUR: Colour = Colour::new(0x0099ff);
-const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y";
+const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y (UTC%Z)";
 
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
