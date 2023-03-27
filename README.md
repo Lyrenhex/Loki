@@ -15,7 +15,7 @@ server (alone).
     - [x] Management command so that the bot owner can update the
           response to this.
 - [ ] Nickname auto-changer lottery
-- [ ] Responses to specific text in messages (but not actual commands)
+- [x] Responses to specific text in messages (but not actual commands)
 - [ ] Periodic checks for how many known issues are present in FH5
 and compares to the same list for GT7. Output in number of pages.
 - [x] "Meme of the week"
