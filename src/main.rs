@@ -28,7 +28,8 @@ const FEATURES: &str =
 - Meme voting system.
 - Automatic nickname change when people start streaming. \
 (Note that this is not available for the server owner...)
-- Subscriptions to bot events.";
+- Subscriptions to bot events.
+- Configurable responses to text phrases.";
 
 pub type Result = core::result::Result<(), Error>;
 
@@ -44,7 +45,11 @@ async fn main() {
 
     // Login with a bot token from the environment
     let mut client = config
-        .discord_client(GatewayIntents::non_privileged() | GatewayIntents::GUILD_PRESENCES)
+        .discord_client(
+            GatewayIntents::non_privileged()
+                | GatewayIntents::GUILD_PRESENCES
+                | GatewayIntents::MESSAGE_CONTENT,
+        )
         .event_handler(handler)
         .await
         .expect("Error creating client");

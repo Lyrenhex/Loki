@@ -10,6 +10,7 @@ pub mod events;
 pub mod memes;
 mod status_meaning;
 mod stream_indicator;
+mod text_response;
 pub mod thread_reviver;
 
 pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
@@ -18,6 +19,7 @@ pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
         Box::new(memes::Memes),
         Box::new(status_meaning::StatusMeaning),
         Box::new(stream_indicator::StreamIndicator),
+        Box::new(text_response::TextResponse),
         Box::new(thread_reviver::ThreadReviver),
     ]
 }
