@@ -218,7 +218,7 @@ impl Memes {
             let data = ctx.data.read().await;
             if let Some(memes) = get_memes(&data, &g.id) {
                 let reset_time = memes.next_reset();
-                info!("Next reset: {}", reset_time);
+                info!("[Guild: {}] Next reset: {}", &g.id, reset_time);
                 drop(data);
                 let now = Utc::now();
                 let time_until_ping = reset_time
@@ -227,7 +227,8 @@ impl Memes {
                     .signed_duration_since(now);
                 if time_until_ping.num_seconds() > 0 {
                     info!(
-                        "Sleeping for {}s until it's time to ping",
+                        "[Guild: {}] Sleeping for {}s until it's time to ping",
+                        &g.id,
                         time_until_ping.num_seconds()
                     );
                     tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
@@ -260,9 +261,15 @@ Two days left! Perhaps time to post some?",
                 }
                 let now = Utc::now();
                 let time_until_reset = reset_time.signed_duration_since(now);
+                info!(
+                    "[Guild: {}] Time until reset: {}",
+                    &g.id,
+                    time_until_reset.num_seconds()
+                );
                 if time_until_reset.num_seconds() > 0 {
                     info!(
-                        "Sleeping for {}s until it's time to reset",
+                        "[Guild: {}] Sleeping for {}s until it's time to reset",
+                        &g.id,
                         time_until_reset.num_seconds()
                     );
                     tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
@@ -281,6 +288,11 @@ Two days left! Perhaps time to post some?",
                         let mut victor: Option<Message> = None;
                         let mut reacted = memes.has_reacted();
                         let meme_list = memes.reset();
+                        info!(
+                            "[Guild: {}] Performing reset on {} entries.",
+                            &g.id,
+                            meme_list.len()
+                        );
                         for meme in meme_list {
                             if let Ok(meme) = channel.message(&ctx.http, meme).await {
                                 if !meme.is_own(&ctx.cache) {
@@ -347,6 +359,7 @@ You've got until {}.",
                         };
                         memes.add(initial_message.id);
                         config.save();
+                        info!("[Guild: {}] Reset complete.", &g.id);
                     }
                 }
                 drop(data);

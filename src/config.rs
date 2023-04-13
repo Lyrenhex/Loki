@@ -12,6 +12,7 @@ use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
 use crate::subsystems::events::Event;
+use crate::subsystems::timeout_monitor::UserTimeoutData;
 
 /// Abstraction to try get a handle to a [GuildId]'s [Guild] entry
 /// from the config, based on a [RwLockReadGuard<TypeMap>] obtained
@@ -157,6 +158,7 @@ pub struct Guild {
     threads_started: bool,
     response_map: Option<HashMap<String, String>>,
     memes: Option<Memes>,
+    timeouts: Option<HashMap<String, UserTimeoutData>>,
 }
 
 impl Guild {
@@ -201,6 +203,17 @@ impl Guild {
 
     pub fn response_map(&self) -> &Option<HashMap<String, String>> {
         &self.response_map
+    }
+
+    pub fn timeouts_mut(&mut self) -> &mut HashMap<String, UserTimeoutData> {
+        if self.timeouts.is_none() {
+            self.timeouts = Some(HashMap::new());
+        }
+        self.timeouts.as_mut().unwrap()
+    }
+
+    pub fn timeouts(&self) -> &Option<HashMap<String, UserTimeoutData>> {
+        &self.timeouts
     }
 }
 

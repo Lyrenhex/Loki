@@ -35,7 +35,7 @@ and compares to the same list for GT7. Output in number of pages.
   - Users may choose to receive specific bot events, which will be
     DM'd to them when the event fires. This feature is a prelude of
     the Reminders feature.
-- [ ] Monitoring system for timeouts
+- [x] Monitoring system for timeouts
   - Track aggregate data about how many times a user has been timed
     out, and the total time they have been timed out for.
 - [x] Revive threads when they get archived.
@@ -48,6 +48,7 @@ and compares to the same list for GT7. Output in number of pages.
 
 The bot requires the following privileged Gateway Intents:
 - `GUILD_PRESENCES`
+- `SERVER_MEMBERS`
 - `MESSAGE_CONTENT`
 
 ### Configuration
