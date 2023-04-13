@@ -4,7 +4,7 @@ mod error;
 mod serenity_handler;
 mod subsystems;
 
-use log::error;
+use log::{error, info};
 use serenity::{
     prelude::{GatewayIntents, Mentionable},
     utils::Colour,
@@ -29,13 +29,16 @@ const FEATURES: &str =
 - Automatic nickname change when people start streaming. \
 (Note that this is not available for the server owner...)
 - Subscriptions to bot events.
-- Configurable responses to text phrases.";
+- Configurable responses to text phrases.
+- Timeout monitoring and statistics.";
 
 pub type Result = core::result::Result<(), Error>;
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
+
+    info!("Starting up...");
 
     let config = Config::load();
 
@@ -48,6 +51,7 @@ async fn main() {
         .discord_client(
             GatewayIntents::non_privileged()
                 | GatewayIntents::GUILD_PRESENCES
+                | GatewayIntents::GUILD_MEMBERS
                 | GatewayIntents::MESSAGE_CONTENT,
         )
         .event_handler(handler)

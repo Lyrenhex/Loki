@@ -3,9 +3,9 @@ use crate::config::Config;
 use crate::subsystems;
 use crate::subsystems::events::Event;
 use log::{error, info};
-use serenity::model::prelude::GuildChannel;
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
+use serenity::model::prelude::{GuildChannel, Member};
 use serenity::{
     async_trait,
     model::prelude::{
@@ -114,6 +114,12 @@ impl EventHandler for SerenityHandler<'_> {
     async fn thread_update(&self, ctx: Context, thread: GuildChannel) {
         for s in subsystems() {
             s.thread(&ctx, &thread).await;
+        }
+    }
+
+    async fn guild_member_update(&self, ctx: Context, old: Option<Member>, new: Member) {
+        for s in subsystems() {
+            s.member(&ctx, &old, &new).await;
         }
     }
 }

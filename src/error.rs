@@ -3,6 +3,7 @@ use std::fmt::Display;
 #[derive(Debug)]
 pub enum Error {
     InvalidChannel,
+    InvalidUser,
     InvalidEvent(String),
     MissingActionRoutine,
     SerenityError(serenity::Error),
@@ -23,6 +24,7 @@ impl Display for Error {
 Are you sure it's the correct type of channel, and that I have \
 access to it?"
             ),
+            Self::InvalidUser => write!(f, "**Error: Invalid user**"),
             Self::InvalidEvent(s) => write!(
                 f,
                 "**Error: Invalid event**

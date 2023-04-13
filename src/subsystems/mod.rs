@@ -1,6 +1,6 @@
 use serenity::{
     async_trait,
-    model::prelude::{GuildChannel, Message, Presence, Ready},
+    model::prelude::{GuildChannel, Member, Message, Presence, Ready},
     prelude::Context,
 };
 
@@ -12,6 +12,7 @@ mod status_meaning;
 mod stream_indicator;
 mod text_response;
 pub mod thread_reviver;
+pub mod timeout_monitor;
 
 pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
     vec![
@@ -21,6 +22,7 @@ pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
         Box::new(stream_indicator::StreamIndicator),
         Box::new(text_response::TextResponse),
         Box::new(thread_reviver::ThreadReviver),
+        Box::new(timeout_monitor::TimeoutMonitor),
     ]
 }
 
@@ -32,4 +34,5 @@ pub trait Subsystem: Send + Sync {
     async fn message(&self, _ctx: &Context, _message: &Message) {}
     async fn presence(&self, _ctx: &Context, _new_data: &Presence) {}
     async fn thread(&self, _ctx: &Context, _thread: &GuildChannel) {}
+    async fn member(&self, _ctx: &Context, _old: &Option<Member>, _new: &Member) {}
 }
