@@ -17,7 +17,7 @@ pub mod timeout_monitor;
 pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
     vec![
         Box::new(events::Events),
-        Box::new(memes::Memes),
+        Box::new(memes::MemesVoting),
         Box::new(status_meaning::StatusMeaning),
         Box::new(stream_indicator::StreamIndicator),
         Box::new(text_response::TextResponse),

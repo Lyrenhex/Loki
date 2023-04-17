@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use std::{env, fs};
 use tokio::sync::RwLockReadGuard;
 
-use chrono::{Days, Utc};
 use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
+use serenity::model::prelude::{ChannelId, GuildId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
 use crate::subsystems::events::Event;
+use crate::subsystems::memes::Memes;
 use crate::subsystems::timeout_monitor::UserTimeoutData;
 
 /// Abstraction to try get a handle to a [GuildId]'s [Guild] entry
@@ -214,56 +214,5 @@ impl Guild {
 
     pub fn timeouts(&self) -> &Option<HashMap<String, UserTimeoutData>> {
         &self.timeouts
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Memes {
-    channel: ChannelId,
-    last_reset: chrono::DateTime<Utc>,
-    memes_list: Vec<MessageId>,
-    reacted: bool,
-}
-
-impl Memes {
-    fn new(channel: ChannelId) -> Self {
-        Self {
-            channel,
-            last_reset: Utc::now(),
-            memes_list: Vec::new(),
-            reacted: false,
-        }
-    }
-
-    pub fn list(&self) -> &Vec<MessageId> {
-        &self.memes_list
-    }
-
-    pub fn add(&mut self, message: MessageId) {
-        self.memes_list.push(message);
-    }
-
-    pub fn next_reset(&self) -> chrono::DateTime<Utc> {
-        self.last_reset.checked_add_days(Days::new(7)).unwrap()
-    }
-
-    pub fn reset(&mut self) -> Vec<MessageId> {
-        self.last_reset = Utc::now();
-        self.reacted = false;
-        let memes_list = self.memes_list.clone();
-        self.memes_list.clear();
-        memes_list
-    }
-
-    pub fn channel(&self) -> ChannelId {
-        self.channel
-    }
-
-    pub fn has_reacted(&self) -> bool {
-        self.reacted
-    }
-
-    pub fn reacted(&mut self) {
-        self.reacted = true;
     }
 }

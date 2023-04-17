@@ -51,7 +51,7 @@ impl EventHandler for SerenityHandler<'_> {
         if !started {
             // start long-running threads for this guild.
             join!(
-                subsystems::memes::Memes::guild_init(ctx.clone(), g.clone()),
+                subsystems::memes::MemesVoting::guild_init(ctx.clone(), g.clone()),
                 subsystems::thread_reviver::ThreadReviver::guild_init(ctx.clone(), g.clone())
             );
         }
