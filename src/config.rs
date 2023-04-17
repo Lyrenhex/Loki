@@ -3,16 +3,21 @@ use std::collections::HashMap;
 use std::{env, fs};
 use tokio::sync::RwLockReadGuard;
 
-use chrono::{Days, Utc};
 use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{ChannelId, GuildId, MessageId, UserId};
+use serenity::model::prelude::{GuildId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
+#[cfg(feature = "events")]
 use crate::subsystems::events::Event;
+#[cfg(feature = "memes")]
+use crate::subsystems::memes::Memes;
+#[cfg(feature = "timeout-monitor")]
 use crate::subsystems::timeout_monitor::UserTimeoutData;
+#[cfg(feature = "memes")]
+use serenity::model::prelude::ChannelId;
 
 /// Abstraction to try get a handle to a [GuildId]'s [Guild] entry
 /// from the config, based on a [RwLockReadGuard<TypeMap>] obtained
@@ -27,6 +32,7 @@ pub fn get_guild<'a>(data: &'a RwLockReadGuard<TypeMap>, guild: &GuildId) -> Opt
 /// from a [serenity::prelude::Context].
 ///
 /// In particular, this function helps to avoid a double-nested `if`.
+#[cfg(feature = "memes")]
 pub fn get_memes<'a>(data: &'a RwLockReadGuard<TypeMap>, guild: &GuildId) -> Option<&'a Memes> {
     if let Some(guild) = get_guild(data, guild) {
         guild.memes()
@@ -44,6 +50,7 @@ pub struct Config {
     /// Using a [String] here as [toml] has issues deserialising this to
     /// anything else, for some reason?
     guilds: Option<HashMap<String, Guild>>,
+    #[cfg(feature = "events")]
     subscribers: Option<HashMap<crate::subsystems::events::Event, Vec<UserId>>>,
 }
 
@@ -63,6 +70,7 @@ impl Config {
         if config.guilds.is_none() {
             config.guilds = Some(HashMap::new());
         }
+        #[cfg(feature = "events")]
         if config.subscribers.is_none() {
             config.subscribers = Some(HashMap::new());
         }
@@ -111,6 +119,15 @@ impl Config {
         }
     }
 
+    /// Construct a [ClientBuilder] from the supplied
+    /// [GatewayIntents] and the configured Discord token.
+    pub fn discord_client(&self, intents: GatewayIntents) -> ClientBuilder {
+        Client::builder(&self.tokens.discord, intents)
+    }
+}
+
+#[cfg(feature = "events")]
+impl Config {
     pub fn subscribers(&self, event: Event) -> Option<&Vec<UserId>> {
         if let Some(subscribers) = &self.subscribers {
             subscribers.get(&event)
@@ -126,7 +143,10 @@ impl Config {
             unreachable!()
         }
     }
+}
 
+#[cfg(feature = "status-meaning")]
+impl Config {
     pub fn get_status_meaning(&self) -> Option<String> {
         self.status_meaning.clone()
     }
@@ -134,12 +154,6 @@ impl Config {
     pub fn set_status_meaning(&mut self, s: Option<String>) {
         self.status_meaning = s;
         self.save();
-    }
-
-    /// Construct a [ClientBuilder] from the supplied
-    /// [GatewayIntents] and the configured Discord token.
-    pub fn discord_client(&self, intents: GatewayIntents) -> ClientBuilder {
-        Client::builder(&self.tokens.discord, intents)
     }
 }
 
@@ -157,10 +171,34 @@ pub struct Guild {
     #[serde(skip)]
     threads_started: bool,
     response_map: Option<HashMap<String, String>>,
+    #[cfg(feature = "memes")]
     memes: Option<Memes>,
+    #[cfg(feature = "timeout-monitor")]
     timeouts: Option<HashMap<String, UserTimeoutData>>,
 }
 
+impl Guild {
+    pub fn threads_started(&self) -> bool {
+        self.threads_started
+    }
+
+    pub fn set_threads_started(&mut self) {
+        self.threads_started = true;
+    }
+
+    pub fn response_map_mut(&mut self) -> &mut HashMap<String, String> {
+        if self.response_map.is_none() {
+            self.response_map = Some(HashMap::new());
+        }
+        self.response_map.as_mut().unwrap()
+    }
+
+    pub fn response_map(&self) -> &Option<HashMap<String, String>> {
+        &self.response_map
+    }
+}
+
+#[cfg(feature = "memes")]
 impl Guild {
     pub fn set_memes_channel(&mut self, channel: Option<ChannelId>) {
         if let Some(channel) = channel {
@@ -185,26 +223,10 @@ impl Guild {
             None
         }
     }
+}
 
-    pub fn threads_started(&self) -> bool {
-        self.threads_started
-    }
-
-    pub fn set_threads_started(&mut self) {
-        self.threads_started = true;
-    }
-
-    pub fn response_map_mut(&mut self) -> &mut HashMap<String, String> {
-        if self.response_map.is_none() {
-            self.response_map = Some(HashMap::new());
-        }
-        self.response_map.as_mut().unwrap()
-    }
-
-    pub fn response_map(&self) -> &Option<HashMap<String, String>> {
-        &self.response_map
-    }
-
+#[cfg(feature = "timeout-monitor")]
+impl Guild {
     pub fn timeouts_mut(&mut self) -> &mut HashMap<String, UserTimeoutData> {
         if self.timeouts.is_none() {
             self.timeouts = Some(HashMap::new());
@@ -214,56 +236,5 @@ impl Guild {
 
     pub fn timeouts(&self) -> &Option<HashMap<String, UserTimeoutData>> {
         &self.timeouts
-    }
-}
-
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Memes {
-    channel: ChannelId,
-    last_reset: chrono::DateTime<Utc>,
-    memes_list: Vec<MessageId>,
-    reacted: bool,
-}
-
-impl Memes {
-    fn new(channel: ChannelId) -> Self {
-        Self {
-            channel,
-            last_reset: Utc::now(),
-            memes_list: Vec::new(),
-            reacted: false,
-        }
-    }
-
-    pub fn list(&self) -> &Vec<MessageId> {
-        &self.memes_list
-    }
-
-    pub fn add(&mut self, message: MessageId) {
-        self.memes_list.push(message);
-    }
-
-    pub fn next_reset(&self) -> chrono::DateTime<Utc> {
-        self.last_reset.checked_add_days(Days::new(7)).unwrap()
-    }
-
-    pub fn reset(&mut self) -> Vec<MessageId> {
-        self.last_reset = Utc::now();
-        self.reacted = false;
-        let memes_list = self.memes_list.clone();
-        self.memes_list.clear();
-        memes_list
-    }
-
-    pub fn channel(&self) -> ChannelId {
-        self.channel
-    }
-
-    pub fn has_reacted(&self) -> bool {
-        self.reacted
-    }
-
-    pub fn reacted(&mut self) {
-        self.reacted = true;
     }
 }

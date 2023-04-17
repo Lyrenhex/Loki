@@ -3,12 +3,13 @@ use std::time::Duration;
 use chrono::{Days, Utc};
 use log::{error, info};
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use serenity::{
     async_trait,
     model::{
         prelude::{
-            interaction::application_command::CommandDataOptionValue, ChannelType, Guild, Message,
-            MessageFlags,
+            interaction::application_command::CommandDataOptionValue, ChannelId, ChannelType,
+            Guild, Message, MessageFlags, MessageId,
         },
         Permissions,
     },
@@ -27,13 +28,14 @@ use crate::{
 
 use super::Subsystem;
 
+const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y (UTC%Z)";
 const REACTION_CHANCE: f64 = 0.1;
 const REACTION_EMOTE: char = '🤖';
 
-pub struct Memes;
+pub struct MemesVoting;
 
 #[async_trait]
-impl Subsystem for Memes {
+impl Subsystem for MemesVoting {
     fn generate_commands(&self) -> Vec<Command<'static>> {
         vec![Command::new(
             "memes",
@@ -77,9 +79,7 @@ impl Subsystem for Memes {
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
-                                    reset_time
-                                        .with_timezone(&chrono::Local)
-                                        .format(crate::DATE_FMT),
+                                    reset_time.with_timezone(&chrono::Local).format(DATE_FMT),
                                 )),
                             )
                             .await?;
@@ -160,7 +160,7 @@ I won't see them anymore. :("
     }
 }
 
-impl Memes {
+impl MemesVoting {
     /// Catch up on any messages that were missed while the bot was
     /// offline.
     pub async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
@@ -332,7 +332,7 @@ You've got until {}.",
                                         memes
                                             .next_reset()
                                             .with_timezone(&chrono::Local)
-                                            .format(crate::DATE_FMT),
+                                            .format(DATE_FMT),
                                     )),
                                 )
                                 .await
@@ -351,7 +351,7 @@ You've got until {}.",
                                         memes
                                             .next_reset()
                                             .with_timezone(&chrono::Local)
-                                            .format(crate::DATE_FMT)
+                                            .format(DATE_FMT)
                                     )),
                                 )
                                 .await
@@ -377,5 +377,56 @@ You've got until {}.",
             // at 7am.)
             tokio::time::sleep(Duration::new(86_400, 0)).await;
         }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Memes {
+    channel: ChannelId,
+    last_reset: chrono::DateTime<Utc>,
+    memes_list: Vec<MessageId>,
+    reacted: bool,
+}
+
+impl Memes {
+    pub fn new(channel: ChannelId) -> Self {
+        Self {
+            channel,
+            last_reset: Utc::now(),
+            memes_list: Vec::new(),
+            reacted: false,
+        }
+    }
+
+    pub fn list(&self) -> &Vec<MessageId> {
+        &self.memes_list
+    }
+
+    pub fn add(&mut self, message: MessageId) {
+        self.memes_list.push(message);
+    }
+
+    pub fn next_reset(&self) -> chrono::DateTime<Utc> {
+        self.last_reset.checked_add_days(Days::new(7)).unwrap()
+    }
+
+    pub fn reset(&mut self) -> Vec<MessageId> {
+        self.last_reset = Utc::now();
+        self.reacted = false;
+        let memes_list = self.memes_list.clone();
+        self.memes_list.clear();
+        memes_list
+    }
+
+    pub fn channel(&self) -> ChannelId {
+        self.channel
+    }
+
+    pub fn has_reacted(&self) -> bool {
+        self.reacted
+    }
+
+    pub fn reacted(&mut self) {
+        self.reacted = true;
     }
 }

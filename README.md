@@ -11,14 +11,19 @@ server (alone).
 
 ## Planned features
 
-- [x] Command to explain my Discord status.
+Each implemented feature is enabled by default.
+You may enable specific feature sets by using `--no-default-features` at compile-time,
+and supply only the feature flags which you wish to enable (please see the section on
+Privileged Intents below).
+
+- [x] Command to explain my Discord status. (`status-meaning`)
     - [x] Management command so that the bot owner can update the
           response to this.
 - [ ] Nickname auto-changer lottery
-- [x] Responses to specific text in messages (but not actual commands)
+- [x] Responses to specific text in messages (but not actual commands) (`text-response`)
 - [ ] Periodic checks for how many known issues are present in FH5
 and compares to the same list for GT7. Output in number of pages.
-- [x] "Meme of the week"
+- [x] "Meme of the week" (`memes`)
     - Once started, it watches the memes channel.
     - After 5 days, if no memes have been posted, it posts a
       reminder.
@@ -27,29 +32,39 @@ and compares to the same list for GT7. Output in number of pages.
       and the system resets for the next week.
 - [ ] Reminders.
   - Probably generic reminders, set by server admins.
-- [x] Automatic nickname updates when live on Twitch.
+- [x] Automatic nickname updates when live on Twitch. (`stream-indicator`)
   - I will never understand why the built-in "Streamer mode" on
     Discord simply doesn't do this. Having to check the status
     to see if someone in a VC is streaming is, frankly, silly.
-- [x] Event system
+- [x] Event system (`events`)
   - Users may choose to receive specific bot events, which will be
     DM'd to them when the event fires. This feature is a prelude of
     the Reminders feature.
-- [x] Monitoring system for timeouts
+- [x] Monitoring system for timeouts (`timeout-monitor`)
   - Track aggregate data about how many times a user has been timed
     out, and the total time they have been timed out for.
-- [x] Revive threads when they get archived.
+- [x] Revive threads when they get archived. (`thread_reviver`)
   - This requires `MANAGE_THREADS` permission.
   - This is (and supersedes) [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver).
 
-## Getting started
-
 ### Gateway Intents
 
-The bot requires the following privileged Gateway Intents:
-- `GUILD_PRESENCES`
-- `SERVER_MEMBERS`
-- `MESSAGE_CONTENT`
+The following lists detail which feature flags require specific privileged intents to function.
+You may supply the intents' feature flag to enable the flags that require it in one go.
+
+> **Note:** If you supply the dependent feature flags on their own, you must *also* specify the intent's
+> feature flag, or else the function will fail with a permission error.
+
+- **Guild Presences** (`guild-presences`)
+  - `stream-indicator`
+
+- **Server Members** (`guild-members`)
+  - `timeout-monitor`
+
+- **Message Content** (`message-content`)
+  - `text-response`
+
+## Getting started
 
 ### Configuration
 

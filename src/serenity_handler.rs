@@ -1,7 +1,6 @@
-use crate::command::{notify_subscribers, OptionType};
+use crate::command::OptionType;
 use crate::config::Config;
 use crate::subsystems;
-use crate::subsystems::events::Event;
 use log::{error, info};
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
@@ -15,7 +14,12 @@ use serenity::{
     },
     prelude::{Context, EventHandler},
 };
-use tokio::join;
+use tokio::task::JoinSet;
+
+#[cfg(feature = "events")]
+use crate::command::notify_subscribers;
+#[cfg(feature = "events")]
+use crate::subsystems::events::Event;
 
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
@@ -50,10 +54,20 @@ impl EventHandler for SerenityHandler<'_> {
         drop(data);
         if !started {
             // start long-running threads for this guild.
-            join!(
-                subsystems::memes::Memes::guild_init(ctx.clone(), g.clone()),
-                subsystems::thread_reviver::ThreadReviver::guild_init(ctx.clone(), g.clone())
-            );
+            if cfg!(feature = "memes") || cfg!(feature = "thread-reviver") {
+                let mut handles: JoinSet<()> = JoinSet::new();
+                #[cfg(feature = "memes")]
+                handles.spawn(subsystems::memes::MemesVoting::guild_init(
+                    ctx.clone(),
+                    g.clone(),
+                ));
+                #[cfg(feature = "thread-reviver")]
+                handles.spawn(subsystems::thread_reviver::ThreadReviver::guild_init(
+                    ctx.clone(),
+                    g.clone(),
+                ));
+                handles.detach_all();
+            }
         }
     }
 
@@ -74,6 +88,7 @@ impl EventHandler for SerenityHandler<'_> {
                     };
                     if let Err(e) = cmd.run(&ctx, &mut command).await {
                         error!("Error running '{}': {e:?}", cmd.name());
+                        #[cfg(feature = "events")]
                         notify_subscribers(
                             &ctx,
                             Event::Error,
