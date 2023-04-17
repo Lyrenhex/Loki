@@ -7,11 +7,16 @@ use serenity::{
     model::prelude::interaction::{
         application_command::ApplicationCommandInteraction, InteractionResponseType,
     },
-    prelude::{Context, HttpError},
+    prelude::HttpError,
     Error,
 };
 
-use crate::{config::Config, subsystems::events::Event, COLOUR};
+use crate::COLOUR;
+
+#[cfg(feature = "events")]
+use crate::{config::Config, subsystems::events::Event};
+#[cfg(feature = "events")]
+use serenity::prelude::Context;
 
 /// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
 /// from the provided input string.
@@ -75,6 +80,7 @@ pub async fn edit_embed_response(
 }
 
 /// Notify the subscribers to an event that it has fired.
+#[cfg(feature = "events")]
 pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
     let data = ctx.data.read().await;
     let config = data.get::<Config>().unwrap();

@@ -28,6 +28,7 @@ use crate::{
 
 use super::Subsystem;
 
+const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y (UTC%Z)";
 const REACTION_CHANCE: f64 = 0.1;
 const REACTION_EMOTE: char = '🤖';
 
@@ -78,9 +79,7 @@ impl Subsystem for MemesVoting {
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
 The post with the most total reactions by {} wins!",
-                                    reset_time
-                                        .with_timezone(&chrono::Local)
-                                        .format(crate::DATE_FMT),
+                                    reset_time.with_timezone(&chrono::Local).format(DATE_FMT),
                                 )),
                             )
                             .await?;
@@ -333,7 +332,7 @@ You've got until {}.",
                                         memes
                                             .next_reset()
                                             .with_timezone(&chrono::Local)
-                                            .format(crate::DATE_FMT),
+                                            .format(DATE_FMT),
                                     )),
                                 )
                                 .await
@@ -352,7 +351,7 @@ You've got until {}.",
                                         memes
                                             .next_reset()
                                             .with_timezone(&chrono::Local)
-                                            .format(crate::DATE_FMT)
+                                            .format(DATE_FMT)
                                     )),
                                 )
                                 .await
