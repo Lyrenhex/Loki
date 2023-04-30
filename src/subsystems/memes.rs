@@ -296,14 +296,15 @@ Two days left! Perhaps time to post some?",
                         for meme in meme_list {
                             if let Ok(meme) = channel.message(&ctx.http, meme).await {
                                 if !meme.is_own(&ctx.cache) {
+                                    let mut total_reactions: u64 =
+                                        meme.reactions.iter().map(|m| m.count).sum();
                                     if !reacted
                                         && rand::thread_rng().gen_bool(REACTION_CHANCE)
                                         && meme.react(&ctx.http, REACTION_EMOTE).await.is_ok()
                                     {
                                         reacted = true;
+                                        total_reactions += 1;
                                     }
-                                    let total_reactions: u64 =
-                                        meme.reactions.iter().map(|m| m.count).sum();
                                     if total_reactions > most_reactions {
                                         most_reactions = total_reactions;
                                         victor = Some(meme);
