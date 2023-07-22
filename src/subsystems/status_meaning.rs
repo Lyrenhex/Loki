@@ -108,7 +108,7 @@ impl Subsystem for StatusMeaning {
                     Box::pin(async {
                         let data = ctx.data.read().await;
                         let config = data.get::<Config>().unwrap();
-                        let manager = config.get_manager().to_user(&ctx.http).await?.tag();
+                        let manager = config.get_manager().to_user(&ctx.http).await?.mention();
                         let resp = match config.get_status_meaning() {
                             Some(meaning) => format!(
                                 "**Status meaning:**

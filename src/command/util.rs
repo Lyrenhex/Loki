@@ -100,7 +100,7 @@ _You're receiving this message because you're subscribed to the \
                         )
                         .await
                     {
-                        error!("Could not DM user {subscriber} ({}): {e:?}", u.tag());
+                        error!("Could not DM user {subscriber} ({}): {e:?}", u.name);
                     }
                 }
                 Err(e) => error!("User {subscriber} could not be resolved: {e:?}"),
