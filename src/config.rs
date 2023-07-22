@@ -7,7 +7,7 @@ use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{GuildId, UserId};
+use serenity::model::prelude::{Channel, GuildId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
 #[cfg(feature = "events")]
@@ -15,7 +15,9 @@ use crate::subsystems::events::Event;
 #[cfg(feature = "memes")]
 use crate::subsystems::memes::Memes;
 #[cfg(feature = "timeout-monitor")]
-use crate::subsystems::timeout_monitor::UserTimeoutData;
+use crate::subsystems::timeout_monitor::{
+    AnnouncementsConfig as TimeoutAnnouncementsConfig, UserTimeoutData,
+};
 #[cfg(feature = "memes")]
 use serenity::model::prelude::ChannelId;
 
@@ -175,6 +177,8 @@ pub struct Guild {
     memes: Option<Memes>,
     #[cfg(feature = "timeout-monitor")]
     timeouts: Option<HashMap<String, UserTimeoutData>>,
+    #[cfg(feature = "timeout-monitor")]
+    timeouts_announcement_config: Option<TimeoutAnnouncementsConfig>,
 }
 
 impl Guild {
@@ -236,5 +240,25 @@ impl Guild {
 
     pub fn timeouts(&self) -> &Option<HashMap<String, UserTimeoutData>> {
         &self.timeouts
+    }
+
+    pub fn timeouts_announcement_init(&mut self, channel: Channel) {
+        if let Some(_) = self.timeouts_announcement_config {
+            error!("Attempted to initialise timeout announcement subsystem when it's already initialised!");
+            return;
+        }
+        self.timeouts_announcement_config = Some(TimeoutAnnouncementsConfig::new(channel));
+    }
+
+    pub fn timeouts_announcement_uninit(&mut self) {
+        self.timeouts_announcement_config = None;
+    }
+
+    pub fn timeouts_announcement_config_mut(&mut self) -> Option<&mut TimeoutAnnouncementsConfig> {
+        self.timeouts_announcement_config.as_mut()
+    }
+
+    pub fn timeouts_announcement_config(&self) -> Option<&TimeoutAnnouncementsConfig> {
+        self.timeouts_announcement_config.as_ref()
     }
 }

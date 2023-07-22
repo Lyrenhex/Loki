@@ -1,10 +1,13 @@
 use chrono::{DateTime, Utc};
-use log::info;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serenity::{
     async_trait,
     model::{
-        prelude::{interaction::application_command::CommandDataOptionValue, Member},
+        prelude::{
+            interaction::application_command::CommandDataOptionValue, Channel, ChannelId,
+            ChannelType, Member,
+        },
         Permissions, Timestamp,
     },
     prelude::{Context, Mentionable},
@@ -13,9 +16,60 @@ use serenity::{
 use crate::{
     command::{create_response, Command, OptionType, PermissionType},
     config::{get_guild, Config},
+    create_embed,
 };
 
 use super::Subsystem;
+
+const ANNOUNCEMENT_TEXT: &str = "[User] has been timed out [x] times now!";
+
+/// Configuration for the announcements in a specific guild.
+#[derive(Serialize, Deserialize)]
+pub struct AnnouncementsConfig {
+    /// Channel to announce in.
+    channel: ChannelId,
+    /// Prefix to prepend before the number of times a user was timed out, during an announcement.
+    prefix: String,
+}
+
+impl AnnouncementsConfig {
+    /// Construct a new [AnnouncementsConfig] with the given announcements channel.
+    pub fn new(channel: Channel) -> Self {
+        Self {
+            channel: channel.id(),
+            prefix: String::default(),
+        }
+    }
+
+    /// ID of the channel to announce in.
+    pub fn channel(&self) -> ChannelId {
+        self.channel
+    }
+
+    /// Set the channel to announce in.
+    pub fn set_channel(&mut self, channel: Channel) {
+        self.channel = channel.id();
+    }
+
+    /// Prefix to prepend before the number of times a user was timed out, during an announcement.
+    pub fn prefix(&self) -> &String {
+        &self.prefix
+    }
+
+    /// Set the prefix to append before the number of times a user was timed out in the announcement.
+    pub fn set_prefix(&mut self, prefix: &str) {
+        self.prefix = prefix.into();
+    }
+
+    pub fn announcement_text(&self) -> String {
+        format!(
+            "{}{}{}",
+            self.prefix(),
+            if self.prefix() != "" { " " } else { "" },
+            ANNOUNCEMENT_TEXT
+        )
+    }
+}
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct UserTimeoutData {
@@ -38,10 +92,16 @@ impl Subsystem for TimeoutMonitor {
             "timeouts",
             "Timeout statistics for a given user.",
             PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            None,
+        )
+        .add_variant(Command::new(
+            "check",
+            "Check timeout statistics for a given user.",
+            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
             Some(Box::new(move |ctx, command| {
                 Box::pin(async {
                     let user = if let Some(CommandDataOptionValue::User(user, _)) =
-                        &command.data.options[0].resolved
+                        &command.data.options[0].options[0].resolved
                     {
                         user
                     } else {
@@ -66,6 +126,107 @@ impl Subsystem for TimeoutMonitor {
             "The user to view timeout statistics of.",
             OptionType::User,
             true,
+        )))
+        .add_variant(Command::new(
+            "configure_announcements",
+            "Configure announcements when a user is timed out.",
+            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    // Set announcement channel if it's been supplied.
+                    if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
+                        let mut data = ctx.data.write().await;
+                        let config = data.get_mut::<Config>().unwrap();
+                        let guild = config.guild_mut(&command.guild_id.unwrap());
+                        if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
+                            let channel = channel.id.to_channel(&ctx.http).await?;
+                            if let Some(announcement_config) = guild.timeouts_announcement_config_mut() {
+                                announcement_config.set_channel(channel);
+                            } else {
+                                guild.timeouts_announcement_init(channel);
+                            }
+                            config.save();
+                        }
+                    } else {
+                        // No channel set - is there one already...?
+                        // If not, for any reason, we should stop processing immediately.
+                        let data = ctx.data.read().await;
+                        let guild = get_guild(&data, &command.guild_id.unwrap());
+                        // We don't know this guild.
+                        if guild.is_none() {
+                            create_response(&ctx.http, command, &"You must set an announcements channel first!".into(), true).await;
+                            return Ok(());
+                        }
+                        let announcements_config = guild.unwrap().timeouts_announcement_config();
+                        // No announcements channel set!
+                        if announcements_config.is_none() {
+                            create_response(&ctx.http, command, &"You must set an announcements channel first!".into(), true).await;
+                            return Ok(());
+                        }
+                        // There is an announcements channel set, so we can continue with that.
+                    };
+
+                    // Set announcement prefix if it's been supplied.
+                    if let Some(prefix_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "announcement_prefix") {
+                        let mut data = ctx.data.write().await;
+                        let config = data.get_mut::<Config>().unwrap();
+                        let guild = config.guild_mut(&command.guild_id.unwrap());
+                        let announcement_config = guild.timeouts_announcement_config_mut().unwrap();
+                        if let Some(CommandDataOptionValue::String(prefix)) = &prefix_opt.resolved {
+                            announcement_config.set_prefix(prefix);
+                            config.save();
+                        }
+                    };
+
+                    let data = ctx.data.read().await;
+                    let guild = get_guild(&data, &command.guild_id.unwrap());
+                    let announcements_config = &guild.unwrap().timeouts_announcement_config().unwrap();
+                    let resp = format!("**Timeouts announcement config updated!**
+Channel: {}
+Announcement text: {}",
+                        announcements_config.channel().to_channel(&ctx.http).await?,
+                        announcements_config.announcement_text());
+                    create_response(&ctx.http, command, &resp, true).await;
+                    Ok(())
+                })
+            })),
+        )
+        .add_option(crate::command::Option::new(
+            "channel",
+            "The channel to announce timeouts in.",
+            OptionType::Channel(Some(vec![ChannelType::Text])),
+            false,
+        ))
+        .add_option(crate::command::Option::new(
+            "announcement_prefix",
+            "Text to prepend before the timeout counter message.",
+            OptionType::StringInput(None, None),
+            false,
+        )))
+        .add_variant(Command::new(
+            "stop_announcements",
+            "Stop all announcements. Unsets all configuration values.",
+            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let mut data = ctx.data.write().await;
+                    let config = data.get_mut::<Config>().unwrap();
+                    let guild = config.guild_mut(&command.guild_id.unwrap());
+                    let announcements_config = guild.timeouts_announcement_config_mut();
+                    // No announcements channel set!
+                    if announcements_config.is_none() {
+                        create_response(&ctx.http, command, &"Announcements haven't been set up yet.".into(), true).await;
+                        return Ok(());
+                    }
+                    // There is an announcements channel set.
+                    guild.timeouts_announcement_uninit();
+                    config.save();
+                    drop(data);
+
+                    create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
+                    Ok(())
+                })
+            })),
         ))]
     }
 
@@ -120,7 +281,43 @@ impl Subsystem for TimeoutMonitor {
                     utd.count += 1;
                     utd.total_time +=
                         (communication_disabled_until.with_timezone(&Utc) - now).num_seconds();
+                    let count = utd.count;
                     config.save();
+                    drop(data);
+                    let data = ctx.data.read().await;
+                    let guild = get_guild(&data, &new.guild_id).unwrap();
+                    if let Some(announcements_config) = guild.timeouts_announcement_config() {
+                        if let Some(channel) = announcements_config
+                            .channel
+                            .to_channel(&ctx.http)
+                            .await
+                            .unwrap()
+                            .guild()
+                        {
+                            channel
+                                .send_message(
+                                    &ctx.http,
+                                    create_embed(format!(
+                                        "{}{}{} has been timed out {} times now!",
+                                        announcements_config.prefix(),
+                                        if announcements_config.prefix() != "" {
+                                            " "
+                                        } else {
+                                            ""
+                                        },
+                                        new.user.name,
+                                        count,
+                                    )),
+                                )
+                                .await
+                                .unwrap();
+                        } else {
+                            error!(
+                                "Invalid channel {} in guild {}",
+                                announcements_config.channel, &new.guild_id
+                            );
+                        }
+                    }
                 }
             }
         } else {
