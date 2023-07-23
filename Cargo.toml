@@ -11,22 +11,22 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["guild-presences", "guild-members", "message-content", "events", "memes", "status-meaning", "thread-reviver"]
+default = ["guild-presences", "guild-members", "message-content", "events", "memes", "status-meaning", "stream-indicator", "text-response", "thread-reviver", "timeout-monitor"]
 
 # Privileged Intents
-# These are feature supersets to enable features requiring these intents.
-guild-presences = ["stream-indicator"]
-guild-members = ["timeout-monitor"]
-message-content = ["text-response"]
+guild-presences = []
+guild-members = []
+message-content = []
 
 # Feature sets
+# Any features requiring a specific privileged intent will automatically enable that intent's feature.
 events = []
 memes = []
 status-meaning = []
-stream-indicator = []
-text-response = []
+stream-indicator = ["guild-presences"]
+text-response = ["message-content"]
 thread-reviver = []
-timeout-monitor = []
+timeout-monitor = ["guild-members"]
 
 [dependencies]
 tokio = { version = "^1.22", features = ["macros", "rt-multi-thread"] }

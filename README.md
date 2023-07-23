@@ -50,10 +50,10 @@ and compares to the same list for GT7. Output in number of pages.
 ### Gateway Intents
 
 The following lists detail which feature flags require specific privileged intents to function.
-You may supply the intents' feature flag to enable the flags that require it in one go.
+Enabling any of these feature flags will automatically enable the required intent's feature flag;
+you must ensure that the bot is configured to use these intents in the Discord Developer Portal.
 
-> **Note:** If you supply the dependent feature flags on their own, you must *also* specify the intent's
-> feature flag, or else the function will fail with a permission error.
+> All features are enabled (and thus all intents required) by default.
 
 - **Guild Presences** (`guild-presences`)
   - `stream-indicator`

@@ -2,6 +2,7 @@ use crate::command::OptionType;
 use crate::config::Config;
 use crate::subsystems;
 use log::{error, info};
+use serenity::builder::CreateApplicationCommandOption;
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::model::prelude::{GuildChannel, Member};
@@ -139,80 +140,102 @@ impl EventHandler for SerenityHandler<'_> {
     }
 }
 
+macro_rules! build_opt {
+    ($opt:ident) => {
+        |option| {
+            option
+                .name($opt.name())
+                .description($opt.description())
+                .kind($opt.kind().into())
+                .required($opt.required());
+            match $opt.kind() {
+                OptionType::StringInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_length(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_length(max);
+                    }
+                }
+                OptionType::StringSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_string_choice(s, s);
+                    });
+                }
+                OptionType::IntegerInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_int_value(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_int_value(max);
+                    }
+                }
+                OptionType::IntegerSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_int_choice(s, *s as i32);
+                    });
+                }
+                OptionType::NumberInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_number_value(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_number_value(max);
+                    }
+                }
+                OptionType::NumberSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_number_choice(s, *s);
+                    });
+                }
+                OptionType::Channel(types) => {
+                    if let Some(types) = types {
+                        option.channel_types(&types);
+                    }
+                }
+                OptionType::Boolean
+                | OptionType::User
+                | OptionType::Role
+                | OptionType::Mentionable
+                | OptionType::Attachment => {}
+            }
+            option
+        }
+    };
+}
+
 impl<'a> SerenityHandler<'a> {
     /// Construct a new handler from a populated config.
     pub fn new(commands: Vec<crate::command::Command<'a>>) -> Self {
         Self { commands }
     }
 
+    fn create_variant<'b>(
+        subcmd: &'b mut CreateApplicationCommandOption,
+        variant: &crate::Command,
+    ) -> &'b mut CreateApplicationCommandOption {
+        let mut subcmd = subcmd
+            .name(variant.name())
+            .description(variant.description())
+            .kind(CommandOptionType::SubCommand)
+            .required(false);
+        assert!(
+            variant.variants().is_empty(),
+            "Discord does not currently support nesting CommandGroups."
+        );
+        // for variant in variant.variants() {
+        //     subcmd = subcmd.create_sub_option(|subcmd| Self::create_variant(subcmd, variant));
+        // }
+        for opt in variant.options() {
+            subcmd = subcmd.create_sub_option(build_opt!(opt))
+        }
+        subcmd
+    }
+
     async fn create_commands(&self, ctx: &Context) -> Vec<Command> {
-        macro_rules! command_constructor {
+        macro_rules! commands_constructor {
             () => {
                 |mut commands| {
-                    macro_rules! build_opt {
-                        ($opt:ident) => {
-                            |option| {
-                                option
-                                    .name($opt.name())
-                                    .description($opt.description())
-                                    .kind($opt.kind().into())
-                                    .required($opt.required());
-                                match $opt.kind() {
-                                    OptionType::StringInput(min, max) => {
-                                        if let Some(min) = min {
-                                            option.min_length(min);
-                                        }
-                                        if let Some(max) = max {
-                                            option.max_length(max);
-                                        }
-                                    }
-                                    OptionType::StringSelect(options) => {
-                                        options.iter().for_each(|s| {
-                                            option.add_string_choice(s, s);
-                                        });
-                                    }
-                                    OptionType::IntegerInput(min, max) => {
-                                        if let Some(min) = min {
-                                            option.min_int_value(min);
-                                        }
-                                        if let Some(max) = max {
-                                            option.max_int_value(max);
-                                        }
-                                    }
-                                    OptionType::IntegerSelect(options) => {
-                                        options.iter().for_each(|s| {
-                                            option.add_int_choice(s, *s as i32);
-                                        });
-                                    }
-                                    OptionType::NumberInput(min, max) => {
-                                        if let Some(min) = min {
-                                            option.min_number_value(min);
-                                        }
-                                        if let Some(max) = max {
-                                            option.max_number_value(max);
-                                        }
-                                    }
-                                    OptionType::NumberSelect(options) => {
-                                        options.iter().for_each(|s| {
-                                            option.add_number_choice(s, *s);
-                                        });
-                                    }
-                                    OptionType::Channel(types) => {
-                                        if let Some(types) = types {
-                                            option.channel_types(&types);
-                                        }
-                                    }
-                                    OptionType::Boolean
-                                    | OptionType::User
-                                    | OptionType::Role
-                                    | OptionType::Mentionable
-                                    | OptionType::Attachment => {}
-                                }
-                                option
-                            }
-                        };
-                    }
-
                     for cmd in self.commands.iter() {
                         commands = commands.create_application_command(|command| {
                             let mut command = command
@@ -227,17 +250,8 @@ impl<'a> SerenityHandler<'a> {
                                 command = command.default_member_permissions(permissions);
                             }
                             for variant in cmd.variants() {
-                                command = command.create_option(|subcmd| {
-                                    let mut subcmd = subcmd
-                                        .name(variant.name())
-                                        .description(variant.description())
-                                        .kind(CommandOptionType::SubCommand)
-                                        .required(false);
-                                    for opt in variant.options() {
-                                        subcmd = subcmd.create_sub_option(build_opt!(opt))
-                                    }
-                                    subcmd
-                                })
+                                command = command
+                                    .create_option(|subcmd| Self::create_variant(subcmd, variant))
                             }
                             for opt in cmd.options() {
                                 command = command.create_option(build_opt!(opt))
@@ -261,13 +275,13 @@ impl<'a> SerenityHandler<'a> {
             .await
             .unwrap();
             guild
-                .set_application_commands(&ctx.http, command_constructor!())
+                .set_application_commands(&ctx.http, commands_constructor!())
                 .await
                 .expect("Failed to create command")
         }
         #[cfg(not(debug_assertions))]
         {
-            Command::set_global_application_commands(&ctx.http, command_constructor!())
+            Command::set_global_application_commands(&ctx.http, commands_constructor!())
                 .await
                 .expect("Failed to create command")
         }

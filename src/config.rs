@@ -243,7 +243,7 @@ impl Guild {
     }
 
     pub fn timeouts_announcement_init(&mut self, channel: Channel) {
-        if let Some(_) = self.timeouts_announcement_config {
+        if self.timeouts_announcement_config.is_some() {
             error!("Attempted to initialise timeout announcement subsystem when it's already initialised!");
             return;
         }
