@@ -9,7 +9,7 @@ use crate::{command::notify_subscribers, config::Config};
 
 use super::Subsystem;
 
-const STREAMING_PREFIX: &str = "🔴 ";
+pub const STREAMING_PREFIX: &str = "🔴 ";
 
 pub struct StreamIndicator;
 

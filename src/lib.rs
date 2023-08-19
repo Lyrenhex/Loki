@@ -51,6 +51,9 @@ start streaming (excluding server owner).";
     if cfg!(feature = "timeout-monitor") {
         features += "\n**•** Timeout monitoring and statistics.";
     }
+    if cfg!(feature = "nickname-lottery") {
+        features += "\n**•** Randomised, automatic nickname changing.";
+    }
 
     features
 }

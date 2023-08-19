@@ -66,11 +66,15 @@ impl<'a> Command<'a> {
     /// Command::new(
     ///     "name",
     ///     "A description of what the command does.",
-    ///     Box::new(move |ctx, command| {
-    ///         Box::pin(async {
-    ///             // do something here
+    ///     PermissionType::Universal,
+    ///     Some(
+    ///         Box::new(move |ctx, command| {
+    ///             Box::pin(async {
+    ///                 // do something here
+    ///                 Ok(())
+    ///             })
     ///         })
-    ///     }),
+    ///     ),
     /// ),
     /// ```
     pub fn new(

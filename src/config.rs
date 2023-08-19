@@ -14,6 +14,8 @@ use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 use crate::subsystems::events::Event;
 #[cfg(feature = "memes")]
 use crate::subsystems::memes::Memes;
+#[cfg(feature = "nickname-lottery")]
+use crate::subsystems::nickname_lottery::NicknameLotteryGuildData;
 #[cfg(feature = "timeout-monitor")]
 use crate::subsystems::timeout_monitor::{
     AnnouncementsConfig as TimeoutAnnouncementsConfig, UserTimeoutData,
@@ -179,6 +181,9 @@ pub struct Guild {
     timeouts: Option<HashMap<String, UserTimeoutData>>,
     #[cfg(feature = "timeout-monitor")]
     timeouts_announcement_config: Option<TimeoutAnnouncementsConfig>,
+    #[cfg(feature = "nickname-lottery")]
+    #[serde(default)]
+    nickname_lottery_data: NicknameLotteryGuildData,
 }
 
 impl Guild {
@@ -226,6 +231,17 @@ impl Guild {
         } else {
             None
         }
+    }
+}
+
+#[cfg(feature = "nickname-lottery")]
+impl Guild {
+    pub fn nickname_lottery_data(&self) -> &NicknameLotteryGuildData {
+        &self.nickname_lottery_data
+    }
+
+    pub fn nickname_lottery_data_mut(&mut self) -> &mut NicknameLotteryGuildData {
+        &mut self.nickname_lottery_data
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "loki-discord-bot"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "A bot to serve various meme-related purposes within a personal Discord server."
 readme = "README.md"
@@ -11,7 +11,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["guild-presences", "guild-members", "message-content", "events", "memes", "status-meaning", "stream-indicator", "text-response", "thread-reviver", "timeout-monitor"]
+default = ["events", "memes", "nickname-lottery", "status-meaning", "stream-indicator", "text-response", "thread-reviver", "timeout-monitor"]
 
 # Privileged Intents
 guild-presences = []
@@ -22,6 +22,7 @@ message-content = []
 # Any features requiring a specific privileged intent will automatically enable that intent's feature.
 events = []
 memes = []
+nickname-lottery = []
 status-meaning = []
 stream-indicator = ["guild-presences"]
 text-response = ["message-content"]

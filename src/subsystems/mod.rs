@@ -10,6 +10,8 @@ use crate::command::Command;
 pub mod events;
 #[cfg(feature = "memes")]
 pub mod memes;
+#[cfg(feature = "nickname-lottery")]
+pub mod nickname_lottery;
 #[cfg(feature = "status-meaning")]
 mod status_meaning;
 #[cfg(feature = "stream-indicator")]
@@ -27,6 +29,8 @@ pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
         Box::new(events::Events),
         #[cfg(feature = "memes")]
         Box::new(memes::MemesVoting),
+        #[cfg(feature = "nickname-lottery")]
+        Box::new(nickname_lottery::NicknameLottery),
         #[cfg(feature = "status-meaning")]
         Box::new(status_meaning::StatusMeaning),
         #[cfg(feature = "stream-indicator")]

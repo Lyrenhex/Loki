@@ -46,8 +46,8 @@ impl Subsystem for StatusMeaning {
                         command
                             .create_interaction_response(&ctx.http, |r| {
                                 r.kind(
-                        serenity::model::application::interaction::InteractionResponseType::Modal,
-                    );
+                                    serenity::model::application::interaction::InteractionResponseType::Modal,
+                                );
                                 r.interaction_response_data(|d| {
                                     d.title("Set Discord status meaning")
                                         .custom_id("set_status_meaning")
@@ -60,41 +60,41 @@ impl Subsystem for StatusMeaning {
                         let collector =
                             serenity::collector::ModalInteractionCollectorBuilder::new(ctx)
                                 .filter(|int| int.data.custom_id == "set_status_meaning")
+                                .collect_limit(1)
                                 .build();
 
-                        collector
-                .then(|int| async move {
-                    let mut data = ctx.data.write().await;
-                    let config = data.get_mut::<Config>().unwrap();
+                        collector.then(|int| async move {
+                            let mut data = ctx.data.write().await;
+                            let config = data.get_mut::<Config>().unwrap();
 
-                    let inputs: Vec<_> = int
-                        .data
-                        .components
-                        .iter()
-                        .flat_map(|r| r.components.iter())
-                        .collect();
+                            let inputs: Vec<_> = int
+                                .data
+                                .components
+                                .iter()
+                                .flat_map(|r| r.components.iter())
+                                .collect();
 
-                    for input in inputs.iter() {
-                        if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
-                            if it.custom_id == "new_status_meaning" {
-                                if !it.value.is_empty() {
-                                    config.set_status_meaning(Some(it.value.clone()));
-                                } else {
-                                    config.set_status_meaning(None);
+                            for input in inputs.iter() {
+                                if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
+                                    if it.custom_id == "new_status_meaning" {
+                                        if !it.value.is_empty() {
+                                            config.set_status_meaning(Some(it.value.clone()));
+                                        } else {
+                                            config.set_status_meaning(None);
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
 
-                    // it's now safe to close the modal, so send a response to it
-                    int.create_interaction_response(&ctx.http, |r| {
-                        r.kind(serenity::model::prelude::interaction::InteractionResponseType::DeferredUpdateMessage)
-                    })
-                    .await
-                    .ok();
-                })
-                .collect::<Vec<_>>()
-                .await;
+                            // it's now safe to close the modal, so send a response to it
+                            int.create_interaction_response(&ctx.http, |r| {
+                                r.kind(serenity::model::prelude::interaction::InteractionResponseType::DeferredUpdateMessage)
+                            })
+                            .await
+                            .ok();
+                        })
+                        .collect::<Vec<_>>()
+                        .await;
 
                         Ok(())
                     })
