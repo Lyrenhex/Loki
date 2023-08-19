@@ -55,7 +55,10 @@ impl EventHandler for SerenityHandler<'_> {
         drop(data);
         if !started {
             // start long-running threads for this guild.
-            if cfg!(feature = "memes") || cfg!(feature = "thread-reviver") {
+            if cfg!(feature = "memes")
+                || cfg!(feature = "thread-reviver")
+                || cfg!(feature = "nickname-lottery")
+            {
                 let mut handles: JoinSet<()> = JoinSet::new();
                 #[cfg(feature = "memes")]
                 handles.spawn(subsystems::memes::MemesVoting::guild_init(
@@ -64,6 +67,11 @@ impl EventHandler for SerenityHandler<'_> {
                 ));
                 #[cfg(feature = "thread-reviver")]
                 handles.spawn(subsystems::thread_reviver::ThreadReviver::guild_init(
+                    ctx.clone(),
+                    g.clone(),
+                ));
+                #[cfg(feature = "nickname-lottery")]
+                handles.spawn(subsystems::nickname_lottery::NicknameLottery::guild_init(
                     ctx.clone(),
                     g.clone(),
                 ));

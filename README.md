@@ -19,7 +19,7 @@ Privileged Intents below).
 - [x] Command to explain my Discord status. (`status-meaning`)
     - [x] Management command so that the bot owner can update the
           response to this.
-- [ ] Nickname auto-changer lottery
+- [x] Nickname auto-changer lottery. (`nickname-lottery`)
 - [x] Responses to specific text in messages (but not actual commands) (`text-response`)
 - [ ] Periodic checks for how many known issues are present in FH5
 and compares to the same list for GT7. Output in number of pages.

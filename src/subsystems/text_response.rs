@@ -106,6 +106,7 @@ Perhaps try adding some?".to_string(), true).await;
                         let collector =
                             serenity::collector::ModalInteractionCollectorBuilder::new(ctx)
                                 .filter(|int| int.data.custom_id == "set_response_value")
+                                .collect_limit(1)
                                 .build();
 
                         collector
