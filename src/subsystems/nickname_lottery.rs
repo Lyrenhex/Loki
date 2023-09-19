@@ -1,5 +1,6 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
+use chrono::{Datelike, TimeZone};
 use log::{error, info};
 use rand::{
     distributions::Distribution,
@@ -26,6 +27,9 @@ use crate::{
 };
 
 use super::Subsystem;
+
+// (30 mins, 5 days) in seconds.
+const REFRESH_INTERVAL: (u64, u64) = (1_800, 432_000);
 
 #[derive(Default)]
 pub struct NicknameLottery;
@@ -213,11 +217,66 @@ impl Subsystem for NicknameLottery {
 
 impl NicknameLottery {
     pub async fn guild_init(ctx: Context, g: Guild) {
-        // between 30 minutes and 7 days
-        let between = rand::distributions::Uniform::from(1_800..604_800);
+        // between 30 minutes and 5 days
+        let between = rand::distributions::Uniform::from(REFRESH_INTERVAL.0..REFRESH_INTERVAL.1);
         loop {
+            let now = chrono::Utc::now();
             if cfg!(not(debug_assertions)) {
-                let tts = Duration::from_secs(between.sample(&mut rand::thread_rng()));
+                let mut tts = Duration::from_secs(between.sample(&mut rand::thread_rng()));
+                // It's April Fool's! Force the minimum refresh interval.
+                if now.month() == 4 && now.day() == 1 {
+                    tts = Duration::from_secs(1_800);
+                } else if now.month() < 4 {
+                    let ctts = chrono::Duration::from_std(tts);
+                    match ctts {
+                        Ok(ctts) => {
+                            if (now + ctts).month() >= 4 {
+                                // Current reset timer will either cross into, or completely skip, April Fool's.
+                                // Clamp to time until April Fool's.
+                                tts = match chrono::Utc
+                                    .with_ymd_and_hms(now.year(), 4, 1, 0, 0, 0)
+                                    .unwrap()
+                                    .signed_duration_since(now)
+                                    .to_std()
+                                {
+                                    Ok(tts) => tts,
+                                    Err(e) => {
+                                        #[cfg(feature = "events")]
+                                        notify_subscribers(
+                                            &ctx,
+                                            Event::Error,
+                                            &format!(
+                                                "**[Guild: {}] Error calculating time until next nickname change:**
+{e}
+
+_Nickname changes are disabled for this guild until next initialisation._",
+                                                g.id
+                                            ),
+                                        )
+                                        .await;
+                                        panic!("OutOfRangeError during reset time calculation.");
+                                    }
+                                };
+                            }
+                        }
+                        Err(e) => {
+                            #[cfg(feature = "events")]
+                            notify_subscribers(
+                                &ctx,
+                                Event::Error,
+                                &format!(
+                                    "**[Guild: {}] Error calculating time until next nickname change:**
+{e}
+
+_Nickname changes are disabled for this guild until next initialisation._",
+                                    g.id
+                                ),
+                            )
+                            .await;
+                            panic!("OutOfRangeError during reset time calculation.");
+                        }
+                    }
+                }
                 info!(
                     "[Guild: {}] Next nickname change in {} minutes.",
                     g.id,
