@@ -110,7 +110,7 @@ impl Subsystem for NicknameLottery {
             .add_variant(
                 Command::new(
                     "set_nicknames",
-                    "Set the list of nicknames that can be applied, either generally or to a specific user.",
+                    "Set the list of nicknames that can be applied to a specific user.",
                     PermissionType::ServerPerms(Permissions::MANAGE_NICKNAMES),
                     Some(Box::new(move |ctx, command| {
                         Box::pin(async move {
