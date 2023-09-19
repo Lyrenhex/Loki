@@ -17,22 +17,40 @@ and supply only the feature flags which you wish to enable (please see the secti
 Privileged Intents below).
 
 - [x] Command to explain my Discord status. (`status-meaning`)
-    - [x] Management command so that the bot owner can update the
-          response to this.
+  - `/status_meaning` (universal)
+  - [x] Management command so that the bot owner can update the
+        response to this.
+    - `/set_status_meaning` (universal, but the bot restricts its functionality to the `Manager`).
 - [x] Nickname auto-changer lottery. (`nickname-lottery`)
+  - `/nickname_lottery set_nicknames {user}` (MANAGE_NICKNAMES)
+    - Opens a Discord form to set the nicknames, pre-filled with the existing list (if any). Nicknames are separated by a newline, and leading and trailing whitespace is stripped. Nicknames are truncated to 30 characters.
+  - Nickname changes occur at a random, changing interval between 30 minutes and 5 days, or every 30 minutes on April Fool's (beginning at midnight).
+    - Note: The current interval does not persist across a restart, so it can be up to a maximal 10 days before a nickname is changed.
 - [x] Responses to specific text in messages (but not actual commands) (`text-response`)
+  - `/response list` (ADMINISTRATOR)
+    - List any currently-set phrases and their response.
+  - `/response set {activation_phrase}` (ADMINISTRATOR)
+    - Set a new response to the given activation phrase.
 - [ ] Periodic checks for how many known issues are present in FH5
 and compares to the same list for GT7. Output in number of pages.
 - [x] "Meme of the week" (`memes`)
-    - Once started, it watches the memes channel.
-    - After 5 days, if no memes have been posted, it posts a
-      reminder.
-    - After a further two days, it tallies up all reactions to the
-      posts. The post with the greatest number of reactions wins,
-      and the system resets for the next week.
+  - Once started, it watches the memes channel.
+  - After 5 days, if no memes have been posted, it posts a
+    reminder.
+  - After a further two days, it tallies up all reactions to the
+    posts. The post with the greatest number of reactions wins,
+    and the system resets for the next week.
+  - `/memes set_channel {channel}` (MANAGE_CHANNELS)
+    - Set the channel to monitor for memes, and starts the countdown from when this command is issued.
+    - This resets the timer and memes list if a channel was already set.
+  - `/memes unset_channel`
+    - Unsets the channel, thus disabling this functionality until a new channel is set.
 - [ ] Reminders.
   - Probably generic reminders, set by server admins.
 - [x] Automatic nickname updates when live on Twitch. (`stream-indicator`)
+  - Prepends `🔴 ` to the start of a user's nickname when they go live, and removes it when they stop.
+  - This does not work for any users who have a role above the bot, or (in any case) the Server Owner.
+  - The user must have their Twitch linked to their Discord account, and have broadcasts shared through their Discord Presence.
   - I will never understand why the built-in "Streamer mode" on
     Discord simply doesn't do this. Having to check the status
     to see if someone in a VC is streaming is, frankly, silly.
@@ -40,9 +58,20 @@ and compares to the same list for GT7. Output in number of pages.
   - Users may choose to receive specific bot events, which will be
     DM'd to them when the event fires. This feature is a prelude of
     the Reminders feature.
+  - `/events subscribe {event}` (universal)
+  - `/events unsubscribe {event}` (universal)
 - [x] Monitoring system for timeouts (`timeout-monitor`)
   - Track aggregate data about how many times a user has been timed
     out, and the total time they have been timed out for.
+  - Can be queried at will, and the number of timeouts can be announced in a specified channel when a user is timed out.
+  - `/timeouts check {user}` (USE_SLASH_COMMANDS)
+    - Get the number of times, and total time, a user was timed out.
+  - `/timeouts configure_announcements {channel?} {announcement_prefix?}` (MANAGE_CHANNELS)
+    - Sets the announcement channel to `channel` if supplied.
+    - Sets the announcement prefix (which is prepended to the announcement message), if supplied. Note that this is not required, but provided in case of server-specific emoji which is intended to be included.
+    - Attempting to set a prefix whilst having never set the channel will fail; a channel must be set first (or at the same time), but does not need to be supplied with every use of this command.
+  - `/timeouts stop_announcements` (MANAGE_CHANNELS)
+    - Stops the announcements when a user is timed out, and unsets any prefix.
 - [x] Revive threads when they get archived. (`thread_reviver`)
   - This requires `MANAGE_THREADS` permission.
   - This is (and supersedes) [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver).
