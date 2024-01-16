@@ -11,6 +11,9 @@ use serenity::{
     async_trait,
     futures::StreamExt,
     model::{
+        channel::ChannelType,
+        id::ChannelId,
+        mention::Mentionable,
         prelude::{interaction::application_command::CommandDataOptionValue, Guild, UserId},
         Permissions,
     },
@@ -20,7 +23,7 @@ use serenity::{
 #[cfg(feature = "events")]
 use crate::{command::notify_subscribers, subsystems::events::Event};
 
-use crate::{command::OptionType, config::Config};
+use crate::{command::OptionType, config::Config, create_embed, create_response};
 use crate::{
     command::{Command, PermissionType},
     get_guild,
@@ -38,6 +41,10 @@ pub struct NicknameLottery;
 pub struct NicknameLotteryGuildData {
     /// HashMap of stringified [UserId]s to their respective list of specific nicknames, or [None] if they are excluded from the system.
     user_specific_nicknames: HashMap<String, Vec<String>>,
+    /// Channel that the bot demands a name change in, if it fails to do so itself. The bot will 'silently' fail if this is not set.
+    complaint_channel: Option<ChannelId>,
+    /// An override for the title of the bot name change demand. Uses default if [None].
+    title_override: Option<String>,
 }
 
 impl NicknameLotteryGuildData {
@@ -94,6 +101,30 @@ impl NicknameLotteryGuildData {
             .keys()
             .choose(&mut rand::thread_rng())
             .map(|id| UserId(u64::from_str(id).unwrap()))
+    }
+
+    /// Set the complaints channel.
+    pub fn set_complaints_channel(&mut self, channel: Option<ChannelId>) {
+        self.complaint_channel = channel;
+    }
+
+    /// Get the complaints channel, if set.
+    pub fn complaints_channel(&self) -> Option<ChannelId> {
+        self.complaint_channel
+    }
+
+    /// Set title override.
+    pub fn set_title_override(&mut self, title_override: Option<String>) {
+        self.title_override = title_override;
+    }
+
+    /// Get title, either [Self::title_override] or the default string.
+    pub fn title(&self) -> String {
+        if let Some(title) = &self.title_override {
+            title.clone()
+        } else {
+            "Bot demands new nickname".to_string()
+        }
     }
 }
 
@@ -211,6 +242,83 @@ impl Subsystem for NicknameLottery {
                     )
                 ),
             )
+            .add_variant(Command::new(
+            "configure_announcements",
+            "Configure announcements when the bot fails to change a user's nickname.",
+            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    // Set announcement channel if it's been supplied.
+                    if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
+                        let mut data = ctx.data.write().await;
+                        let config = data.get_mut::<Config>().unwrap();
+                        let guild = config.guild_mut(&command.guild_id.unwrap());
+                        if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
+                            let channel = channel.id.to_channel(&ctx.http).await?;
+                            guild.nickname_lottery_data_mut().set_complaints_channel(Some(channel.id()));
+                            config.save();
+                        }
+                    };
+
+
+                    // Set title override if it's been supplied.
+                    if let Some(title_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "title_override") {
+                        let mut data = ctx.data.write().await;
+                        let config = data.get_mut::<Config>().unwrap();
+                        let guild = config.guild_mut(&command.guild_id.unwrap());
+                        let lottery_data = guild.nickname_lottery_data_mut();
+                        if let Some(CommandDataOptionValue::String(title_override)) = &title_opt.resolved {
+                            lottery_data.set_title_override(Some(title_override.to_owned()));
+                            config.save();
+                        }
+                    };
+
+
+                    let data = ctx.data.read().await;
+                    let guild = get_guild(&data, &command.guild_id.unwrap());
+                    let lottery_data = &guild.unwrap().nickname_lottery_data();
+                    let resp = format!("**Nickname lottery complaints channel updated!**
+Channel: {}
+Title text: {}",
+                        lottery_data.complaints_channel().unwrap().to_channel(&ctx.http).await?,
+                        lottery_data.title());
+                    create_response(&ctx.http, command, &resp, true).await;
+                    Ok(())
+                })
+            })),
+        )
+        .add_option(crate::command::Option::new(
+            "channel",
+            "The channel to announce timeouts in.",
+            OptionType::Channel(Some(vec![ChannelType::Text])),
+            false,
+        ))
+        .add_option(crate::command::Option::new(
+            "title_override",
+            "Text to prepend before the timeout counter message.",
+            OptionType::StringInput(None, None),
+            false,
+        )))
+        .add_variant(Command::new(
+            "stop_announcements",
+            "Stop all announcements. Unsets all configuration values.",
+            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let mut data = ctx.data.write().await;
+                    let config = data.get_mut::<Config>().unwrap();
+                    let guild = config.guild_mut(&command.guild_id.unwrap());
+                    let lottery_data = guild.nickname_lottery_data_mut();
+                    lottery_data.set_complaints_channel(None);
+                    lottery_data.set_title_override(None);
+                    config.save();
+                    drop(data);
+
+                    create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
+                    Ok(())
+                })
+            })),
+        ))
         ]
     }
 }
@@ -308,13 +416,47 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                     + &new_nick;
                             }
                             info!(
-                                "[Guild: {}] Updating {}'s nickname to {new_nick} (current: {})",
-                                &g.id, &user.id, &old_nick
+                                "[Guild: {}] Updating {}'s nickname to {} (current: {})",
+                                &g.id, &user.id, &new_nick, &old_nick
                             );
                             if let Err(e) = g
-                                .edit_member(&ctx.http, user.id, |m| m.nickname(new_nick))
+                                .edit_member(&ctx.http, user.id, |m| m.nickname(&new_nick))
                                 .await
                             {
+                                if let Some(channel_id) = lottery_data.complaints_channel() {
+                                    let channel = match channel_id.to_channel(&ctx.http).await {
+                                        Ok(channel) => channel.guild(),
+                                        Err(_) => None,
+                                    };
+                                    if let Some(channel) = channel {
+                                        channel
+                                            .send_message(
+                                                &ctx.http,
+                                                create_embed(format!(
+                                                    "**{}**
+{} won/lost the lottery! From now on, they are to be named: `{}`",
+                                                    lottery_data.title(),
+                                                    user.mention(),
+                                                    new_nick,
+                                                )),
+                                            )
+                                            .await
+                                            .unwrap();
+                                    } else {
+                                        #[cfg(feature = "events")]
+                                        notify_subscribers(
+                                            &ctx,
+                                            Event::Error,
+                                            &format!(
+                                                "**[Guild: {}] Invalid complaints channel.**",
+                                                g.id,
+                                            ),
+                                        )
+                                        .await;
+                                        error!("[Guild: {}] Invalid complaints channel.", g.id);
+                                        continue;
+                                    }
+                                }
                                 #[cfg(feature = "events")]
                                 notify_subscribers(
                                     &ctx,
@@ -322,7 +464,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                     &format!(
                                         "**[Guild: {}] Error changing {}'s nickname:**
 {e}",
-                                        g.id, user.id
+                                        g.id, user.id,
                                     ),
                                 )
                                 .await;

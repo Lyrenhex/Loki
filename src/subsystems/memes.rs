@@ -169,6 +169,7 @@ impl MemesVoting {
         info!("Catching up with messages for guild {}...", g.id);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
+        // TODO: we should really split this into two stages to limit the amount of time we have a writable handle on this - retrieve messages via Discord API using a read handle into a local vector, then grab a write handle and actually do the modifications we need.
         if let Some(memes) = guild.memes_mut() {
             // catch up on any messages that were missed while we were offline.
             if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
