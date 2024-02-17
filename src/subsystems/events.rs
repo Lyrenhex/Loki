@@ -85,7 +85,7 @@ impl Subsystem for Events {
                             .as_str()
                             .unwrap();
                         let event = Event::from_str(event)?;
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
                         if !subscribers.contains(&command.user.id) {
@@ -136,7 +136,7 @@ impl Subsystem for Events {
                             .as_str()
                             .unwrap();
                         let event = Event::from_str(event)?;
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
                         if subscribers.contains(&command.user.id) {

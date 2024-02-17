@@ -16,7 +16,9 @@ use crate::COLOUR;
 #[cfg(feature = "events")]
 use crate::{config::Config, subsystems::events::Event};
 #[cfg(feature = "events")]
-use serenity::prelude::Context;
+use serenity::prelude::{Context, TypeMap};
+#[cfg(feature = "events")]
+use tokio::sync::RwLockReadGuard;
 
 /// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
 /// from the provided input string.
@@ -98,7 +100,42 @@ pub async fn edit_embed_response(
 /// Notify the subscribers to an event that it has fired.
 #[cfg(feature = "events")]
 pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
-    let data = ctx.data.read().await;
+    let data = crate::acquire_data_handle!(read ctx);
+    let config = data.get::<Config>().unwrap();
+    if let Some(subscribers) = config.subscribers(event) {
+        for subscriber in subscribers {
+            match subscriber.to_user(&ctx.http).await {
+                Ok(u) => {
+                    if let Err(e) = u
+                        .direct_message(
+                            &ctx.http,
+                            create_embed(format!(
+                                "{message}
+
+_You're receiving this message because you're subscribed to the \
+`{event}` event._"
+                            )),
+                        )
+                        .await
+                    {
+                        error!("Could not DM user {subscriber} ({}): {e:?}", u.name);
+                    }
+                }
+                Err(e) => error!("User {subscriber} could not be resolved: {e:?}"),
+            }
+        }
+    }
+}
+
+/// Notify the subscribers to an event that it has fired, using an existing
+/// read handle for global data.
+#[cfg(feature = "events")]
+pub async fn notify_subscribers_with_handle(
+    ctx: &Context,
+    data: &RwLockReadGuard<'_, TypeMap>,
+    event: Event,
+    message: &str,
+) {
     let config = data.get::<Config>().unwrap();
     if let Some(subscribers) = config.subscribers(event) {
         for subscriber in subscribers {

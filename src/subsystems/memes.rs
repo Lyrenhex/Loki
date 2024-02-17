@@ -66,13 +66,13 @@ impl Subsystem for MemesVoting {
                             } else {
                                 return Err(crate::Error::InvalidChannel);
                             };
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild_config = config.guild_mut(&command.guild_id.unwrap());
                         guild_config.set_memes_channel(Some(channel_id));
                         let reset_time = guild_config.memes().unwrap().next_reset();
                         config.save();
-                        drop(data);
+                        crate::drop_data_handle!(data);
                         let resp = format!("Memes channel set to {}.", channel);
                         channel
                             .send_message(
@@ -103,7 +103,7 @@ The post with the most total reactions by {} wins!",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
             Some(Box::new(move |ctx, command| {
                 Box::pin(async {
-                    let mut data = ctx.data.write().await;
+                    let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
                     let channel = config
                         .guild_mut(&command.guild_id.unwrap())
@@ -113,7 +113,7 @@ The post with the most total reactions by {} wins!",
                         .guild_mut(&command.guild_id.unwrap())
                         .set_memes_channel(None);
                     config.save();
-                    drop(data);
+                    crate::drop_data_handle!(data);
                     let resp = "Memes channel unset.".to_string();
                     create_response(&ctx.http, command, &resp, true).await;
                     if let Some(channel) = channel {
@@ -185,7 +185,7 @@ I won't see them anymore. :("
             }
         }
         if let Some(guild) = message.guild_id {
-            let mut data = ctx.data.write().await;
+            let mut data = crate::acquire_data_handle!(write ctx);
             let config = data.get_mut::<Config>().unwrap();
             let guild = config.guild_mut(&guild);
             if let Some(memes) = guild.memes_mut() {
@@ -209,7 +209,7 @@ impl MemesVoting {
     /// offline.
     pub async fn catch_up_messages(ctx: Context, g: &Guild) -> Context {
         let mut finished = true;
-        let mut data = ctx.data.write().await;
+        let mut data = crate::acquire_data_handle!(write ctx);
         info!("Catching up with messages for guild {}...", g.id);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
@@ -251,7 +251,7 @@ impl MemesVoting {
                 }
             }
         }
-        drop(data);
+        crate::drop_data_handle!(data);
         info!("Finished catching up with messages for guild {}.", g.id);
         ctx
     }
@@ -260,11 +260,11 @@ impl MemesVoting {
         let ctx = Self::catch_up_messages(ctx, &g).await;
 
         loop {
-            let data = ctx.data.read().await;
+            let data = crate::acquire_data_handle!(read ctx);
             if let Some(memes) = get_memes(&data, &g.id) {
                 let reset_time = memes.next_reset();
                 info!("[Guild: {}] Next reset: {}", &g.id, reset_time);
-                drop(data);
+                crate::drop_data_handle!(data);
                 let now = Utc::now();
                 let time_until_ping = reset_time
                     .checked_sub_days(Days::new(2))
@@ -277,7 +277,7 @@ impl MemesVoting {
                         time_until_ping.num_seconds()
                     );
                     tokio::time::sleep(time_until_ping.to_std().unwrap()).await;
-                    let data = ctx.data.read().await;
+                    let data = crate::acquire_data_handle!(read ctx);
                     if let Some(memes) = get_memes(&data, &g.id) {
                         let channel = memes
                             .channel()
@@ -302,7 +302,7 @@ Two days left! Perhaps time to post some?",
                                 .ok();
                         }
                     }
-                    drop(data);
+                    crate::drop_data_handle!(data);
                 }
                 let now = Utc::now();
                 let time_until_reset = reset_time.signed_duration_since(now);
@@ -323,7 +323,7 @@ Two days left! Perhaps time to post some?",
                     // another go:
                     continue;
                 }
-                let mut data = ctx.data.write().await;
+                let mut data = crate::acquire_data_handle!(write ctx);
                 let config = data.get_mut::<Config>().unwrap();
                 let guild = config.guild_mut(&g.id);
                 if let Some(memes) = guild.memes_mut() {
@@ -409,9 +409,9 @@ You've got until {}.",
                         info!("[Guild: {}] Reset complete.", &g.id);
                     }
                 }
-                drop(data);
+                crate::drop_data_handle!(data);
             } else {
-                drop(data);
+                crate::drop_data_handle!(data);
             }
             // let up for a while so we don't hog the mutex...
             // sleep for a day, which also gives a nice window to change

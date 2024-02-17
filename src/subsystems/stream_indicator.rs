@@ -20,7 +20,7 @@ impl Subsystem for StreamIndicator {
     }
 
     async fn presence(&self, ctx: &Context, new_data: &Presence) {
-        let data = ctx.data.read().await;
+        let data = crate::acquire_data_handle!(read ctx);
         let config = data.get::<Config>().unwrap();
         if let Some(activity) = new_data
             .activities
@@ -53,7 +53,7 @@ impl Subsystem for StreamIndicator {
                         notify = false;
                     }
                 }
-                drop(data);
+                crate::drop_data_handle!(data);
                 if notify {
                     notify_subscribers(
                         ctx,

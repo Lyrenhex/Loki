@@ -47,12 +47,12 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
-        let mut data = ctx.data.write().await;
+        let mut data = crate::acquire_data_handle!(write ctx);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
         let started = guild.threads_started();
         guild.set_threads_started();
-        drop(data);
+        crate::drop_data_handle!(data);
         if !started {
             // start long-running threads for this guild.
             if cfg!(feature = "memes")

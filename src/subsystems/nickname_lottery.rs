@@ -23,7 +23,10 @@ use serenity::{
 #[cfg(feature = "events")]
 use crate::{command::notify_subscribers, subsystems::events::Event};
 
-use crate::{command::OptionType, config::Config, create_embed, create_response};
+use crate::{
+    command::OptionType, config::Config, create_embed, create_response,
+    notify_subscribers_with_handle,
+};
 use crate::{
     command::{Command, PermissionType},
     get_guild,
@@ -154,7 +157,7 @@ impl Subsystem for NicknameLottery {
                             }).unwrap();
                             let guild_id = command.guild_id.unwrap();
 
-                            let data = ctx.data.read().await;
+                            let data = crate::acquire_data_handle!(read ctx);
                             let guild = get_guild(&data, &guild_id).unwrap();
                             let nickname_lottery_data = guild.nickname_lottery_data();
 
@@ -168,7 +171,7 @@ impl Subsystem for NicknameLottery {
                                 .placeholder("List of nicknames, each on a new line (or blank to unset).")
                                 .required(false)
                                 .value(old_nicknames);
-                            drop(data);
+                            crate::drop_data_handle!(data);
 
                             let mut components = serenity::builder::CreateComponents::default();
                             components.create_action_row(|r| r.add_input_text(input_nicks));
@@ -197,7 +200,7 @@ impl Subsystem for NicknameLottery {
                                     .build();
 
                             collector.then(|int| async move {
-                                let mut data = ctx.data.write().await;
+                                let mut data = crate::acquire_data_handle!(write ctx);
                                 let config = data.get_mut::<Config>().unwrap();
                                 let guild = config.guild_mut(&guild_id.clone());
                                 let nickname_lottery_data = guild.nickname_lottery_data_mut();
@@ -250,7 +253,7 @@ impl Subsystem for NicknameLottery {
                 Box::pin(async {
                     // Set announcement channel if it's been supplied.
                     if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
@@ -263,7 +266,7 @@ impl Subsystem for NicknameLottery {
 
                     // Set title override if it's been supplied.
                     if let Some(title_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "title_override") {
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         let lottery_data = guild.nickname_lottery_data_mut();
@@ -274,7 +277,7 @@ impl Subsystem for NicknameLottery {
                     };
 
 
-                    let data = ctx.data.read().await;
+                    let data = crate::acquire_data_handle!(read ctx);
                     let guild = get_guild(&data, &command.guild_id.unwrap());
                     let lottery_data = &guild.unwrap().nickname_lottery_data();
                     let resp = format!("**Nickname lottery complaints channel updated!**
@@ -305,14 +308,14 @@ Title text: {}",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
             Some(Box::new(move |ctx, command| {
                 Box::pin(async {
-                    let mut data = ctx.data.write().await;
+                    let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
                     let guild = config.guild_mut(&command.guild_id.unwrap());
                     let lottery_data = guild.nickname_lottery_data_mut();
                     lottery_data.set_complaints_channel(None);
                     lottery_data.set_title_override(None);
                     config.save();
-                    drop(data);
+                    crate::drop_data_handle!(data);
 
                     create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
                     Ok(())
@@ -398,7 +401,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
                 );
             }
             // Time to update a user's nickname!
-            let data = ctx.data.read().await;
+            let data = crate::acquire_data_handle!(read ctx);
             if let Some(guild) = get_guild(&data, &g.id) {
                 let lottery_data = guild.nickname_lottery_data();
                 if let Some(user) = lottery_data.get_random_user() {
@@ -444,8 +447,9 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                             .unwrap();
                                     } else {
                                         #[cfg(feature = "events")]
-                                        notify_subscribers(
+                                        notify_subscribers_with_handle(
                                             &ctx,
+                                            &data,
                                             Event::Error,
                                             &format!(
                                                 "**[Guild: {}] Invalid complaints channel.**",
@@ -458,8 +462,9 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                     }
                                 }
                                 #[cfg(feature = "events")]
-                                notify_subscribers(
+                                notify_subscribers_with_handle(
                                     &ctx,
+                                    &data,
                                     Event::Error,
                                     &format!(
                                         "**[Guild: {}] Error changing {}'s nickname:**
