@@ -18,7 +18,7 @@ impl Subsystem for StatusMeaning {
                 PermissionType::Universal,
                 Some(Box::new(move |ctx, command| {
                     Box::pin(async move {
-                        let data = ctx.data.read().await;
+                        let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
                         let manager = config.get_manager().to_user(&ctx.http).await?;
                         if command.user != manager {
@@ -38,7 +38,7 @@ impl Subsystem for StatusMeaning {
                         if let Some(old_meaning) = config.get_status_meaning() {
                             meaning.value(old_meaning);
                         }
-                        drop(data);
+                        crate::drop_data_handle!(data);
 
                         let mut components = serenity::builder::CreateComponents::default();
                         components.create_action_row(|r| r.add_input_text(meaning));
@@ -64,7 +64,7 @@ impl Subsystem for StatusMeaning {
                                 .build();
 
                         collector.then(|int| async move {
-                            let mut data = ctx.data.write().await;
+                            let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
 
                             let inputs: Vec<_> = int
@@ -106,7 +106,7 @@ impl Subsystem for StatusMeaning {
                 command::PermissionType::Universal,
                 Some(Box::new(move |ctx, command| {
                     Box::pin(async {
-                        let data = ctx.data.read().await;
+                        let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
                         let manager = config.get_manager().to_user(&ctx.http).await?.mention();
                         let resp = match config.get_status_meaning() {

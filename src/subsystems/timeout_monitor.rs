@@ -109,7 +109,7 @@ impl Subsystem for TimeoutMonitor {
                     } else {
                         return Err(crate::Error::InvalidUser);
                     };
-                    let data = ctx.data.read().await;
+                    let data = crate::acquire_data_handle!(read ctx);
                     let mut resp = format!("{} hasn't been timed out!", user.mention());
                     if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
                         if let Some(timeouts) = guild.timeouts() {
@@ -137,7 +137,7 @@ impl Subsystem for TimeoutMonitor {
                 Box::pin(async {
                     // Set announcement channel if it's been supplied.
                     if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
@@ -152,7 +152,7 @@ impl Subsystem for TimeoutMonitor {
                     } else {
                         // No channel set - is there one already...?
                         // If not, for any reason, we should stop processing immediately.
-                        let data = ctx.data.read().await;
+                        let data = crate::acquire_data_handle!(read ctx);
                         let guild = get_guild(&data, &command.guild_id.unwrap());
                         // We don't know this guild.
                         if guild.is_none() {
@@ -170,7 +170,7 @@ impl Subsystem for TimeoutMonitor {
 
                     // Set announcement prefix if it's been supplied.
                     if let Some(prefix_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "announcement_prefix") {
-                        let mut data = ctx.data.write().await;
+                        let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         let announcement_config = guild.timeouts_announcement_config_mut().unwrap();
@@ -180,7 +180,7 @@ impl Subsystem for TimeoutMonitor {
                         }
                     };
 
-                    let data = ctx.data.read().await;
+                    let data = crate::acquire_data_handle!(read ctx);
                     let guild = get_guild(&data, &command.guild_id.unwrap());
                     let announcements_config = &guild.unwrap().timeouts_announcement_config().unwrap();
                     let resp = format!("**Timeouts announcement config updated!**
@@ -211,7 +211,7 @@ Announcement text: {}",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
             Some(Box::new(move |ctx, command| {
                 Box::pin(async {
-                    let mut data = ctx.data.write().await;
+                    let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
                     let guild = config.guild_mut(&command.guild_id.unwrap());
                     let announcements_config = guild.timeouts_announcement_config_mut();
@@ -223,7 +223,7 @@ Announcement text: {}",
                     // There is an announcements channel set.
                     guild.timeouts_announcement_uninit();
                     config.save();
-                    drop(data);
+                    crate::drop_data_handle!(data);
 
                     create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
                     Ok(())
@@ -251,7 +251,7 @@ Announcement text: {}",
                         "quantity" => utd_a.count.cmp(&utd_b.count),
                     "total time" => utd_a.total_time.cmp(&utd_b.total_time),
                 _ => unreachable!() }};
-                    let data = ctx.data.read().await;
+                    let data = crate::acquire_data_handle!(read ctx);
                     if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
                         if let Some(timeouts) = guild.timeouts() {
                             let mut entries = timeouts.iter().map(|(uid, utd)| (uid.clone(), utd.clone())).collect::<Vec<(String, UserTimeoutData)>>();
@@ -301,7 +301,7 @@ Announcement text: {}",
                 }
             }
         }
-        let mut data = ctx.data.write().await;
+        let mut data = crate::acquire_data_handle!(write ctx);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&new.guild_id);
         if let Some(communication_disabled_until) = new.communication_disabled_until {
@@ -336,8 +336,8 @@ Announcement text: {}",
                         (communication_disabled_until.with_timezone(&Utc) - now).num_seconds();
                     let count = utd.count;
                     config.save();
-                    drop(data);
-                    let data = ctx.data.read().await;
+                    crate::drop_data_handle!(data);
+                    let data = crate::acquire_data_handle!(read ctx);
                     let guild = get_guild(&data, &new.guild_id).unwrap();
                     if let Some(announcements_config) = guild.timeouts_announcement_config() {
                         if let Some(channel) = announcements_config
