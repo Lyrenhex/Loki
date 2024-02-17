@@ -231,7 +231,7 @@ Announcement text: {}",
             })),
         ))
         .add_variant(Command::new(
-            "rankings",
+            "leaderboard",
             "Display the leaderboard for timeout statistics.",
             PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
             Some(Box::new(move |ctx, command| {
