@@ -1,12 +1,13 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use chrono::{Days, Utc};
 use log::{error, info};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serenity::{
-    async_trait,
+    async_trait, futures,
     model::{
+        id::UserId,
         prelude::{
             interaction::application_command::CommandDataOptionValue, ChannelId, ChannelType,
             Guild, Message, MessageFlags, MessageId,
@@ -19,6 +20,7 @@ use serenity::{
 use crate::{
     command::{create_embed, create_response, Command, PermissionType},
     config::get_memes,
+    create_raw_embed, create_response_from_embed,
 };
 use crate::{
     command::{notify_subscribers, OptionType},
@@ -39,8 +41,8 @@ impl Subsystem for MemesVoting {
     fn generate_commands(&self) -> Vec<Command<'static>> {
         vec![Command::new(
             "memes",
-            "Configuration commands for the meme-voting system.",
-            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+            "Commands for the meme-voting system.",
+            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
             None,
         )
         .add_variant(
@@ -128,6 +130,48 @@ I won't see them anymore. :("
                                 .await?;
                         }
                     }
+                    Ok(())
+                })
+            })),
+        ))
+        .add_variant(Command::new(
+            "leaderboard",
+            "Display the leaderboard for meme voting victories.",
+            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let mut resp = create_raw_embed(format!("**Top 10 Memesters**"));
+                    let mut users = String::new();
+                    let mut counts = String::new();
+                    let data = crate::acquire_data_handle!(read ctx);
+                    if let Some(memes) = get_memes(&data, &command.guild_id.unwrap()) {
+                        let mut entries = memes
+                            .victors()
+                            .iter()
+                            .map(|(uid, count)| (uid.clone(), *count))
+                            .collect::<Vec<(String, u32)>>();
+                        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_a.cmp(&cnt_b));
+                        let iter = entries.iter().take(10);
+                        users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
+                            Ok::<String, crate::Error>(
+                                UserId::from(uid.parse::<u64>().unwrap())
+                                    .to_user(&ctx.http)
+                                    .await?
+                                    .mention()
+                                    .to_string(),
+                            )
+                        }))
+                        .await?
+                        .join("\n");
+                        counts = iter
+                            .clone()
+                            .map(|(_, cnt)| cnt.to_string())
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                    }
+                    resp.field("User", users, true)
+                        .field("Victories", counts, true);
+                    create_response_from_embed(&ctx.http, command, resp, false).await;
                     Ok(())
                 })
             })),
@@ -315,6 +359,7 @@ Two days left! Perhaps time to post some?",
                         }
 
                         let initial_message = if let Some(victor) = victor {
+                            memes.add_victory(victor.author.id);
                             channel
                                 .send_message(
                                     &ctx.http,
@@ -387,6 +432,7 @@ pub struct Memes {
     channel: ChannelId,
     last_reset: chrono::DateTime<Utc>,
     memes_list: Vec<MessageId>,
+    times_won: HashMap<String, u32>,
     reacted: bool,
 }
 
@@ -396,6 +442,7 @@ impl Memes {
             channel,
             last_reset: Utc::now(),
             memes_list: Vec::new(),
+            times_won: HashMap::new(),
             reacted: false,
         }
     }
@@ -430,5 +477,13 @@ impl Memes {
 
     pub fn reacted(&mut self) {
         self.reacted = true;
+    }
+
+    pub fn victors(&self) -> &HashMap<String, u32> {
+        &self.times_won
+    }
+
+    pub fn add_victory(&mut self, uid: UserId) {
+        *self.times_won.entry(uid.to_string()).or_insert(0) += 1;
     }
 }

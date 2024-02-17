@@ -26,16 +26,21 @@ pub fn create_embed(
     move |m: &mut CreateMessage| m.add_embed(|e| e.description(s).colour(COLOUR))
 }
 
-/// Create a text-based embed response with the given `message`.
-pub async fn create_response(
+/// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
+/// from the provided input string.
+pub fn create_raw_embed(s: impl ToString) -> CreateEmbed {
+    let mut embed = CreateEmbed::default();
+    embed.description(s).colour(COLOUR);
+    embed
+}
+
+/// Create an embed response.
+pub async fn create_response_from_embed(
     http: &Arc<Http>,
     interaction: &mut ApplicationCommandInteraction,
-    message: &String,
+    embed: CreateEmbed,
     ephemeral: bool,
 ) {
-    let mut embed = CreateEmbed::default();
-    embed.description(message);
-    embed.colour(COLOUR);
     match interaction
         .create_interaction_response(&http, |response| {
             response
@@ -60,6 +65,17 @@ pub async fn create_response(
             _ => error!("{}", e),
         },
     }
+}
+
+/// Create a text-based embed response with the given `message`.
+pub async fn create_response(
+    http: &Arc<Http>,
+    interaction: &mut ApplicationCommandInteraction,
+    message: &String,
+    ephemeral: bool,
+) {
+    let embed = create_raw_embed(message);
+    create_response_from_embed(http, interaction, embed, ephemeral).await
 }
 
 /// Edit the original text-based embed response, replacing it with

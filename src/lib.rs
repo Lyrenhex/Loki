@@ -23,6 +23,30 @@ const COLOUR: Colour = Colour::new(0x0099ff);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const GITHUB_URL: &str = env!("CARGO_PKG_REPOSITORY");
 
+macro_rules! acquire_data_handle {
+    ($ctx:ident) => { acquire_data_handle!(read $ctx) };
+    (read $ctx:ident) => {{
+        log::trace!("Acquiring data read handle...");
+        let data = $ctx.data.read().await;
+        log::trace!("Acquired data read handle.");
+        data
+    }};
+    (write $ctx:ident) => {{
+        log::trace!("Acquiring data write handle...");
+        let data = $ctx.data.write().await;
+        log::trace!("Acquired data write handle.");
+        data
+    }};
+}
+macro_rules! drop_data_handle {
+    ($data:ident) => {
+        drop($data);
+        log::trace!("Dropping data handle.");
+    };
+}
+pub(crate) use acquire_data_handle;
+pub(crate) use drop_data_handle;
+
 pub type Result = core::result::Result<(), Error>;
 
 /// Construct a string list describing the enabled features.
