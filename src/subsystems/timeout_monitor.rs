@@ -2,8 +2,9 @@ use chrono::{DateTime, Utc};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serenity::{
-    async_trait,
+    async_trait, futures,
     model::{
+        id::UserId,
         prelude::{
             interaction::application_command::CommandDataOptionValue, Channel, ChannelId,
             ChannelType, Member,
@@ -12,11 +13,12 @@ use serenity::{
     },
     prelude::{Context, Mentionable},
 };
+use tinyvec::array_vec;
 
 use crate::{
     command::{create_response, Command, OptionType, PermissionType},
     config::{get_guild, Config},
-    create_embed,
+    create_embed, create_raw_embed, create_response_from_embed,
 };
 
 use super::Subsystem;
@@ -71,7 +73,7 @@ impl AnnouncementsConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone, Copy)]
 pub struct UserTimeoutData {
     /// Total number of timeouts that have been noticed.
     count: i64,
@@ -227,7 +229,58 @@ Announcement text: {}",
                     Ok(())
                 })
             })),
-        ))]
+        ))
+        .add_variant(Command::new(
+            "rankings",
+            "Display the leaderboard for timeout statistics.",
+            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            Some(Box::new(move |ctx, command| {
+                Box::pin(async {
+                    let sort_by = if let Some(CommandDataOptionValue::String(option)) =
+                        &command.data.options[0].options[0].resolved
+                    {
+                        option.to_lowercase()
+                    } else {
+                        return Err(crate::Error::MissingRequiredParam("Option `sort_by` missing on Timeout Ranking invocation.".to_string()));
+                    };
+                    let mut resp = create_raw_embed(format!("**Top 10 Timeout leaderboard** (sorted by {sort_by})"));
+                    let mut users = String::new();
+                    let mut counts = String::new();
+                    let mut times = String::new();
+                    let sort_by= |(_, utd_a): &(String, UserTimeoutData), (_uid_b, utd_b): &(String, UserTimeoutData)| { match sort_by.as_str() {
+                        "quantity" => utd_a.count.cmp(&utd_b.count),
+                    "total time" => utd_a.total_time.cmp(&utd_b.total_time),
+                _ => unreachable!() }};
+                    let data = ctx.data.read().await;
+                    if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
+                        if let Some(timeouts) = guild.timeouts() {
+                            let mut entries = timeouts.iter().map(|(uid, utd)| (uid.clone(), utd.clone())).collect::<Vec<(String, UserTimeoutData)>>();
+                            entries.sort_unstable_by(sort_by);
+                            let iter = entries.iter().take(10);
+                            users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
+                                Ok::<String, crate::Error>(UserId::from(uid.parse::<u64>().unwrap()).to_user(&ctx.http).await?.mention().to_string())
+                            })).await?.join("\n");
+                            counts = iter.clone().map(|(_, utd)| { utd.count.to_string() }).collect::<Vec<String>>().join("\n");
+                            times = iter.map(|(_, utd)| {
+                                let seconds = utd.total_time % 60;
+                                let minutes = (utd.total_time / 60) % 60;
+                                let hours = (utd.total_time / 60 / 60) % 60;
+                                format!("{hours}h {minutes}m {seconds}s")
+                            }).collect::<Vec<String>>().join("\n");
+                        }
+                    }
+                    resp.field("User", users, true).field("Count", counts, true).field("Total time", times, true);
+                    create_response_from_embed(&ctx.http, command, resp, false).await;
+                    Ok(())
+                })
+            })),
+        )
+        .add_option(crate::command::Option::new(
+            "metric",
+            "Metric to sort by.",
+            OptionType::StringSelect(Box::new(array_vec!("Quantity".to_string(), "Total time".to_string()))),
+            true,
+        )))]
     }
 
     async fn member(&self, ctx: &Context, old: &Option<Member>, new: &Member) {
