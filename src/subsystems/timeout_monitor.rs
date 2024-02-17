@@ -247,10 +247,12 @@ Announcement text: {}",
                     let mut users = String::new();
                     let mut counts = String::new();
                     let mut times = String::new();
-                    let sort_by= |(_, utd_a): &(String, UserTimeoutData), (_uid_b, utd_b): &(String, UserTimeoutData)| { match sort_by.as_str() {
-                        "quantity" => utd_a.count.cmp(&utd_b.count),
-                    "total time" => utd_a.total_time.cmp(&utd_b.total_time),
-                _ => unreachable!() }};
+                    let sort_by= |(_, utd_a): &(String, UserTimeoutData), (_uid_b, utd_b): &(String, UserTimeoutData)| {
+                        match sort_by.as_str() {
+                            "quantity" => utd_b.count.cmp(&utd_a.count),
+                            "total time" => utd_b.total_time.cmp(&utd_a.total_time),
+                            _ => unreachable!() }
+                    };
                     let data = crate::acquire_data_handle!(read ctx);
                     if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
                         if let Some(timeouts) = guild.timeouts() {

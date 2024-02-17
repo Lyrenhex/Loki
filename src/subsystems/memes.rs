@@ -150,7 +150,7 @@ I won't see them anymore. :("
                             .iter()
                             .map(|(uid, count)| (uid.clone(), *count))
                             .collect::<Vec<(String, u32)>>();
-                        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_a.cmp(&cnt_b));
+                        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_b.cmp(&cnt_a));
                         let iter = entries.iter().take(10);
                         users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
                             Ok::<String, crate::Error>(
