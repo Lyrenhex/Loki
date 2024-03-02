@@ -3,7 +3,7 @@ mod util;
 use tinyvec::ArrayVec;
 pub use util::*;
 
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 use serenity::{
     model::{
@@ -21,6 +21,8 @@ use crate::Error;
 const MIN_NUM: i64 = -(MAX_NUM);
 const MAX_NUM: i64 = 1 << 54;
 
+pub const NUM_SELECTABLES: usize = 25;
+
 type ActionRoutine = Box<
     dyn (for<'b> Fn(
             &'b Context,
@@ -31,7 +33,7 @@ type ActionRoutine = Box<
         + Send,
 >;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PermissionType {
     /// Available for use by anyone (including in DMs).
     /// Note that individual commands may, in certain circumstances,
@@ -47,17 +49,19 @@ pub enum PermissionType {
 /// A vector of these objects is used to create the Discord-side
 /// "slash commands", and this vector is then used by comparing to
 /// a triggered slash command to determine which routine to execute.
+#[derive(Clone)]
 pub struct Command<'a> {
     name: &'a str,
     description: &'a str,
     permissions: PermissionType,
     options: Vec<Option<'a>>,
     variants: Vec<Command<'a>>,
-    action: std::option::Option<ActionRoutine>,
+    action: Arc<std::option::Option<ActionRoutine>>,
+    global: bool,
 }
 
 impl<'a> Command<'a> {
-    /// Construct a new Command with the given name and description,
+    /// Construct a new global Command with the given name and description,
     /// which performs the given [ActionRoutine] when called.
     ///
     /// ## Example
@@ -92,7 +96,20 @@ impl<'a> Command<'a> {
             permissions,
             options: Vec::new(),
             variants: Vec::new(),
-            action,
+            action: Arc::new(action),
+            global: true,
+        }
+    }
+
+    pub fn new_stub(name: &'a str, action: std::option::Option<ActionRoutine>) -> Self {
+        Self {
+            name,
+            description: "",
+            permissions: PermissionType::Universal,
+            options: Vec::new(),
+            variants: Vec::new(),
+            action: Arc::new(action),
+            global: false,
         }
     }
 
@@ -111,6 +128,10 @@ impl<'a> Command<'a> {
         &self.permissions
     }
 
+    pub fn global(&self) -> bool {
+        self.global
+    }
+
     pub fn add_option(mut self, option: Option<'a>) -> Self {
         self.options.push(option);
         self
@@ -121,6 +142,7 @@ impl<'a> Command<'a> {
     }
 
     pub fn add_variant(mut self, variant: Command<'a>) -> Self {
+        assert_eq!(variant.global(), self.global);
         self.variants.push(variant);
         self
     }
@@ -135,7 +157,7 @@ impl<'a> Command<'a> {
         ctx: &Context,
         command: &mut ApplicationCommandInteraction,
     ) -> crate::Result {
-        if let Some(action) = &self.action {
+        if let Some(action) = &*self.action {
             (action)(ctx, command).await
         } else {
             Err(Error::MissingActionRoutine)
@@ -143,6 +165,7 @@ impl<'a> Command<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Option<'a> {
     name: &'a str,
     description: &'a str,
@@ -169,8 +192,11 @@ impl<'a> Option<'a> {
                 if options.is_empty() {
                     panic!("No choices for StringSelect!");
                 }
-                if options.len() > 25 {
-                    panic!("More than 25 choices for StringSelect: {:?}", options);
+                if options.len() > NUM_SELECTABLES {
+                    panic!(
+                        "More than {NUM_SELECTABLES} choices for StringSelect: {:?}",
+                        options
+                    );
                 }
             }
             OptionType::IntegerInput(min, max) => {
@@ -181,7 +207,7 @@ impl<'a> Option<'a> {
                 }
                 if let Some(max) = max {
                     if max > MAX_NUM {
-                        panic!("Integer maximum value above -2^53: {max}");
+                        panic!("Integer maximum value above 2^53: {max}");
                     }
                 }
             }
@@ -189,8 +215,11 @@ impl<'a> Option<'a> {
                 if options.is_empty() {
                     panic!("No choices for IntegerSelect!");
                 }
-                if options.len() > 25 {
-                    panic!("More than 25 choices for IntegerSelect: {:?}", options);
+                if options.len() > NUM_SELECTABLES {
+                    panic!(
+                        "More than {NUM_SELECTABLES} choices for IntegerSelect: {:?}",
+                        options
+                    );
                 }
                 options
                     .iter()
@@ -204,7 +233,7 @@ impl<'a> Option<'a> {
                 }
                 if let Some(max) = max {
                     if max > MAX_NUM as f64 {
-                        panic!("Number maximum value above -2^53: {max}");
+                        panic!("Number maximum value above 2^53: {max}");
                     }
                 }
             }
@@ -212,8 +241,11 @@ impl<'a> Option<'a> {
                 if options.is_empty() {
                     panic!("No choices for IntegerSelect!");
                 }
-                if options.len() > 25 {
-                    panic!("More than 25 choices for IntegerSelect: {:?}", options);
+                if options.len() > NUM_SELECTABLES {
+                    panic!(
+                        "More than {NUM_SELECTABLES} choices for IntegerSelect: {:?}",
+                        options
+                    );
                 }
                 options
                     .iter()
@@ -257,13 +289,13 @@ pub enum OptionType {
     /// Limited to ([0..6000], [1..6000])
     StringInput(std::option::Option<u16>, std::option::Option<u16>),
     /// A String input based on the given options.
-    StringSelect(Box<ArrayVec<[String; 25]>>),
+    StringSelect(Box<ArrayVec<[String; NUM_SELECTABLES]>>),
     /// An integer input, optionally limited to a specific range.
     /// Note that integers must be between -2^53 and 2^53.
     IntegerInput(std::option::Option<i64>, std::option::Option<i64>),
     /// An integer select.
     /// Note that integers must be between -2^53 and 2^53.
-    IntegerSelect(ArrayVec<[i64; 25]>),
+    IntegerSelect(ArrayVec<[i64; NUM_SELECTABLES]>),
     Boolean,
     User,
     Channel(std::option::Option<Vec<ChannelType>>),
@@ -274,7 +306,7 @@ pub enum OptionType {
     NumberInput(std::option::Option<f64>, std::option::Option<f64>),
     /// A number (double) selection.
     /// Note that numbers must be between -2^53 and 2^53.
-    NumberSelect(ArrayVec<[f64; 25]>),
+    NumberSelect(ArrayVec<[f64; NUM_SELECTABLES]>),
     Attachment,
 }
 

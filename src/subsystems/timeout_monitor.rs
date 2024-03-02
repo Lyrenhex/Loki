@@ -241,7 +241,7 @@ Announcement text: {}",
                     {
                         option.to_lowercase()
                     } else {
-                        return Err(crate::Error::MissingRequiredParam("Option `sort_by` missing on Timeout Ranking invocation.".to_string()));
+                        return Err(crate::Error::InvalidParam("Option `sort_by` missing on Timeout Ranking invocation.".to_string()));
                     };
                     let mut resp = create_raw_embed(format!("**Top 10 Timeout leaderboard** (sorted by {sort_by})"));
                     let mut users = String::new();

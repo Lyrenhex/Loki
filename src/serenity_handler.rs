@@ -2,7 +2,7 @@ use crate::command::OptionType;
 use crate::config::Config;
 use crate::subsystems;
 use log::{error, info};
-use serenity::builder::CreateApplicationCommandOption;
+use serenity::builder::{CreateApplicationCommand, CreateApplicationCommandOption};
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
 use serenity::model::prelude::{GuildChannel, Member};
@@ -25,6 +25,70 @@ use crate::subsystems::events::Event;
 // guild to use for testing purposes.
 #[cfg(debug_assertions)]
 const DEBUG_GUILD_ID: &str = env!("LOKI_DEBUG_GUILD_ID");
+
+macro_rules! build_opt {
+    ($opt:ident) => {
+        |option| {
+            option
+                .name($opt.name())
+                .description($opt.description())
+                .kind($opt.kind().into())
+                .required($opt.required());
+            match $opt.kind() {
+                OptionType::StringInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_length(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_length(max);
+                    }
+                }
+                OptionType::StringSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_string_choice(s, s);
+                    });
+                }
+                OptionType::IntegerInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_int_value(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_int_value(max);
+                    }
+                }
+                OptionType::IntegerSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_int_choice(s, *s as i32);
+                    });
+                }
+                OptionType::NumberInput(min, max) => {
+                    if let Some(min) = min {
+                        option.min_number_value(min);
+                    }
+                    if let Some(max) = max {
+                        option.max_number_value(max);
+                    }
+                }
+                OptionType::NumberSelect(options) => {
+                    options.iter().for_each(|s| {
+                        option.add_number_choice(s, *s);
+                    });
+                }
+                OptionType::Channel(types) => {
+                    if let Some(types) = types {
+                        option.channel_types(&types);
+                    }
+                }
+                OptionType::Boolean
+                | OptionType::User
+                | OptionType::Role
+                | OptionType::Mentionable
+                | OptionType::Attachment => {}
+            }
+            option
+        }
+    };
+}
 
 /// Core implementation logic for [serenity] events.
 pub struct SerenityHandler<'a> {
@@ -58,6 +122,7 @@ impl EventHandler for SerenityHandler<'_> {
             if cfg!(feature = "memes")
                 || cfg!(feature = "thread-reviver")
                 || cfg!(feature = "nickname-lottery")
+                || cfg!(feature = "scoreboard")
             {
                 let mut handles: JoinSet<()> = JoinSet::new();
                 #[cfg(feature = "memes")]
@@ -72,6 +137,11 @@ impl EventHandler for SerenityHandler<'_> {
                 ));
                 #[cfg(feature = "nickname-lottery")]
                 handles.spawn(subsystems::nickname_lottery::NicknameLottery::guild_init(
+                    ctx.clone(),
+                    g.clone(),
+                ));
+                #[cfg(feature = "scoreboard")]
+                handles.spawn(subsystems::scoreboard::Scoreboards::guild_init(
                     ctx.clone(),
                     g.clone(),
                 ));
@@ -148,68 +218,26 @@ impl EventHandler for SerenityHandler<'_> {
     }
 }
 
-macro_rules! build_opt {
-    ($opt:ident) => {
-        |option| {
-            option
-                .name($opt.name())
-                .description($opt.description())
-                .kind($opt.kind().into())
-                .required($opt.required());
-            match $opt.kind() {
-                OptionType::StringInput(min, max) => {
-                    if let Some(min) = min {
-                        option.min_length(min);
-                    }
-                    if let Some(max) = max {
-                        option.max_length(max);
-                    }
-                }
-                OptionType::StringSelect(options) => {
-                    options.iter().for_each(|s| {
-                        option.add_string_choice(s, s);
-                    });
-                }
-                OptionType::IntegerInput(min, max) => {
-                    if let Some(min) = min {
-                        option.min_int_value(min);
-                    }
-                    if let Some(max) = max {
-                        option.max_int_value(max);
-                    }
-                }
-                OptionType::IntegerSelect(options) => {
-                    options.iter().for_each(|s| {
-                        option.add_int_choice(s, *s as i32);
-                    });
-                }
-                OptionType::NumberInput(min, max) => {
-                    if let Some(min) = min {
-                        option.min_number_value(min);
-                    }
-                    if let Some(max) = max {
-                        option.max_number_value(max);
-                    }
-                }
-                OptionType::NumberSelect(options) => {
-                    options.iter().for_each(|s| {
-                        option.add_number_choice(s, *s);
-                    });
-                }
-                OptionType::Channel(types) => {
-                    if let Some(types) = types {
-                        option.channel_types(&types);
-                    }
-                }
-                OptionType::Boolean
-                | OptionType::User
-                | OptionType::Role
-                | OptionType::Mentionable
-                | OptionType::Attachment => {}
-            }
-            option
+pub fn construct_command(
+    cmd: crate::command::Command,
+) -> impl FnOnce(&mut CreateApplicationCommand) -> &mut CreateApplicationCommand + '_ {
+    move |command: &mut CreateApplicationCommand| {
+        let mut command = command
+            .name(cmd.name())
+            .description(cmd.description())
+            .dm_permission(*cmd.permissions() == crate::command::PermissionType::Universal);
+        if let crate::command::PermissionType::ServerPerms(permissions) = *cmd.permissions() {
+            command = command.default_member_permissions(permissions);
         }
-    };
+        for variant in cmd.variants() {
+            command = command
+                .create_option(|subcmd| crate::SerenityHandler::create_variant(subcmd, variant))
+        }
+        for opt in cmd.options() {
+            command = command.create_option(build_opt!(opt))
+        }
+        command
+    }
 }
 
 impl<'a> SerenityHandler<'a> {
@@ -218,7 +246,7 @@ impl<'a> SerenityHandler<'a> {
         Self { commands }
     }
 
-    fn create_variant<'b>(
+    pub(crate) fn create_variant<'b>(
         subcmd: &'b mut CreateApplicationCommandOption,
         variant: &crate::Command,
     ) -> &'b mut CreateApplicationCommandOption {
@@ -244,28 +272,9 @@ impl<'a> SerenityHandler<'a> {
         macro_rules! commands_constructor {
             () => {
                 |mut commands| {
-                    for cmd in self.commands.iter() {
-                        commands = commands.create_application_command(|command| {
-                            let mut command = command
-                                .name(cmd.name())
-                                .description(cmd.description())
-                                .dm_permission(
-                                    *cmd.permissions() == crate::command::PermissionType::Universal,
-                                );
-                            if let crate::command::PermissionType::ServerPerms(permissions) =
-                                *cmd.permissions()
-                            {
-                                command = command.default_member_permissions(permissions);
-                            }
-                            for variant in cmd.variants() {
-                                command = command
-                                    .create_option(|subcmd| Self::create_variant(subcmd, variant))
-                            }
-                            for opt in cmd.options() {
-                                command = command.create_option(build_opt!(opt))
-                            }
-                            command
-                        })
+                    for cmd in self.commands.iter().filter(|cmd| cmd.global()) {
+                        commands =
+                            commands.create_application_command(construct_command(cmd.clone()))
                     }
                     commands
                 }

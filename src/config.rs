@@ -16,6 +16,8 @@ use crate::subsystems::events::Event;
 use crate::subsystems::memes::Memes;
 #[cfg(feature = "nickname-lottery")]
 use crate::subsystems::nickname_lottery::NicknameLotteryGuildData;
+#[cfg(feature = "scoreboard")]
+use crate::subsystems::scoreboard::ScoreboardData;
 #[cfg(feature = "timeout-monitor")]
 use crate::subsystems::timeout_monitor::{
     AnnouncementsConfig as TimeoutAnnouncementsConfig, UserTimeoutData,
@@ -184,6 +186,9 @@ pub struct Guild {
     #[cfg(feature = "nickname-lottery")]
     #[serde(default)]
     nickname_lottery_data: NicknameLotteryGuildData,
+    #[cfg(feature = "scoreboard")]
+    #[serde(default)]
+    scoreboards: ScoreboardData,
 }
 
 impl Guild {
@@ -276,5 +281,16 @@ impl Guild {
 
     pub fn timeouts_announcement_config(&self) -> Option<&TimeoutAnnouncementsConfig> {
         self.timeouts_announcement_config.as_ref()
+    }
+}
+
+#[cfg(feature = "scoreboard")]
+impl Guild {
+    pub fn scoreboards(&self) -> &ScoreboardData {
+        &self.scoreboards
+    }
+
+    pub fn scoreboards_mut(&mut self) -> &mut ScoreboardData {
+        &mut self.scoreboards
     }
 }

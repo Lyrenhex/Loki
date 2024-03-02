@@ -5,7 +5,7 @@ pub enum Error {
     InvalidChannel,
     InvalidUser,
     InvalidEvent(String),
-    MissingRequiredParam(String),
+    InvalidParam(String),
     MissingActionRoutine,
     SerenityError(serenity::Error),
 }
@@ -31,12 +31,13 @@ access to it?"
                 "**Error: Invalid event**
 {s}"
             ),
-            Self::MissingRequiredParam(s) => write!(
+            Self::InvalidParam(s) => write!(
                 f,
-                "**Error: Missing Required Parameter for Command Invocation**
-Either Discord has failed to provide a parameter marked required, or a \
-parameter isn't marked required when it should be.
-{s}"
+                "**Error: Invalid Parameter**
+Either Discord has failed to provide a parameter marked required, a \
+parameter isn't marked required when it should be, or the parameter's
+type was different than expected:
+`{s}`"
             ),
             Self::MissingActionRoutine => write!(
                 f,

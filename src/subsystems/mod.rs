@@ -12,6 +12,8 @@ pub mod events;
 pub mod memes;
 #[cfg(feature = "nickname-lottery")]
 pub mod nickname_lottery;
+#[cfg(feature = "scoreboard")]
+pub mod scoreboard;
 #[cfg(feature = "status-meaning")]
 mod status_meaning;
 #[cfg(feature = "stream-indicator")]
@@ -41,6 +43,8 @@ pub fn subsystems() -> Vec<Box<dyn Subsystem>> {
         Box::new(thread_reviver::ThreadReviver),
         #[cfg(feature = "timeout-monitor")]
         Box::new(timeout_monitor::TimeoutMonitor),
+        #[cfg(feature = "scoreboard")]
+        Box::new(scoreboard::Scoreboards),
     ]
 }
 
