@@ -1,7 +1,7 @@
 use crate::command::OptionType;
 use crate::config::Config;
 use crate::subsystems;
-use log::{error, info};
+use log::{error, info, trace};
 use serenity::builder::{CreateApplicationCommand, CreateApplicationCommandOption};
 #[cfg(debug_assertions)]
 use serenity::model::prelude::GuildId;
