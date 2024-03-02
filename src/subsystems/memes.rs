@@ -286,7 +286,7 @@ impl MemesVoting {
                             .unwrap()
                             .guild()
                             .unwrap();
-                        if memes.list().is_empty() {
+                        if memes.list().len() - 1 == 0 {
                             channel
                                 .send_message(&ctx.http, |m| {
                                     m.add_embed(|e| {
