@@ -110,7 +110,8 @@ impl EventHandler for SerenityHandler<'_> {
         }
     }
 
-    async fn guild_create(&self, ctx: Context, g: Guild, _is_new: bool) {
+    async fn guild_create(&self, ctx: Context, g: Guild, is_new: bool) {
+        trace!("Guild Creation event for {g:?} (new: {is_new})");
         let mut data = crate::acquire_data_handle!(write ctx);
         let config = data.get_mut::<Config>().unwrap();
         let guild = config.guild_mut(&g.id);
@@ -118,6 +119,10 @@ impl EventHandler for SerenityHandler<'_> {
         guild.set_threads_started();
         crate::drop_data_handle!(data);
         if !started {
+            info!(
+                "Starting background threads for guild {} ({}).",
+                g.id, g.name
+            );
             // start long-running threads for this guild.
             if cfg!(feature = "memes")
                 || cfg!(feature = "thread-reviver")
@@ -151,6 +156,7 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        trace!("Handling Interaction: {:?}", interaction);
         if let Interaction::ApplicationCommand(mut command) = interaction {
             for cmd in self.commands.iter() {
                 if cmd.name() == command.data.name {
@@ -193,25 +199,28 @@ impl EventHandler for SerenityHandler<'_> {
     }
 
     async fn message(&self, ctx: Context, message: Message) {
+        trace!("Handling Message: {:?}", message);
         for s in subsystems() {
             s.message(&ctx, &message).await;
         }
     }
 
     async fn presence_update(&self, ctx: Context, new_data: Presence) {
-        info!("Handling Presence updates for {}...", new_data.user.id);
+        trace!("Handling Presence update: {:?}", new_data);
         for s in subsystems() {
             s.presence(&ctx, &new_data).await;
         }
     }
 
     async fn thread_update(&self, ctx: Context, thread: GuildChannel) {
+        trace!("Handling Thread update: {:?}", thread);
         for s in subsystems() {
             s.thread(&ctx, &thread).await;
         }
     }
 
     async fn guild_member_update(&self, ctx: Context, old: Option<Member>, new: Member) {
+        trace!("Handling Guild Member update: {:?} --> {:?}", old, new);
         for s in subsystems() {
             s.member(&ctx, &old, &new).await;
         }
