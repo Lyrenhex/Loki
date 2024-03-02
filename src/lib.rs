@@ -78,6 +78,9 @@ start streaming (excluding server owner).";
     if cfg!(feature = "nickname-lottery") {
         features += "\n**•** Randomised, automatic nickname changing.";
     }
+    if cfg!(feature = "scoreboard") {
+        features += "\n **•** Scoreboards.";
+    }
 
     features
 }

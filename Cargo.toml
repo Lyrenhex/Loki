@@ -20,6 +20,7 @@ default = [
     "text-response",
     "thread-reviver",
     "timeout-monitor",
+    "scoreboard",
 ]
 
 # Privileged Intents
@@ -37,6 +38,7 @@ stream-indicator = ["guild-presences"]
 text-response = ["message-content"]
 thread-reviver = []
 timeout-monitor = ["guild-members"]
+scoreboard = ["dep:const_format"]
 
 [dependencies]
 tokio = { version = "^1.22", features = ["macros", "rt-multi-thread"] }
@@ -49,6 +51,7 @@ rand = "^0.8.5"
 tinyvec = "^1.6.0"
 # Added due to reqwest dependency problems when cross-compiling for RPi
 openssl = { version = "^0.10.32", features = ["vendored"] }
+const_format = { version = "0.2.32", optional = true }
 
 [dependencies.serenity]
 version = "^0.11"

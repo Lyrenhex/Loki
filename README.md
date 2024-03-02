@@ -75,6 +75,15 @@ and compares to the same list for GT7. Output in number of pages.
 - [x] Revive threads when they get archived. (`thread_reviver`)
   - This requires `MANAGE_THREADS` permission.
   - This is (and supersedes) [ThreadReviver](https://github.com/Lyrenhex/ThreadReviver).
+- [x] Scoreboards (`scoreboard`)
+  - `/create_scoreboard {scoreboard name}` (ADMINISTRATOR)
+  - `/scoreboard delete {scoreboard name}` (ADMINISTRATOR)
+  - `/scoreboard view {scoreboard_name} {user?}`
+    - Displays either the top 10 _or_ the score (and place in the leaderboard) of the specified user.
+  - `/scoreboard set {scoreboard name} {score}`
+    - Sets the calling user's score to the specified `score`.
+  - `/scoreboard override {scoreboard name} {user} {score}` (ADMINISTRATOR)
+    - Overrides the `user`'s score to the specified `score`.
 
 ### Gateway Intents
 
