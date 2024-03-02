@@ -30,7 +30,6 @@ use crate::{
 
 use super::Subsystem;
 
-const DATE_FMT: &str = "%l:%M%P on %A %e %B %Y (UTC%Z)";
 const REACTION_CHANCE: f64 = 0.1;
 const REACTION_EMOTE: char = '🤖';
 
@@ -80,8 +79,8 @@ impl Subsystem for MemesVoting {
                                 create_embed(format!(
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
-The post with the most total reactions by {} wins!",
-                                    reset_time.with_timezone(&chrono::Local).format(DATE_FMT),
+The post with the most total reactions by <t:{}:F> wins!",
+                                    reset_time.timestamp(),
                                 )),
                             )
                             .await?;
@@ -286,7 +285,7 @@ impl MemesVoting {
                             .unwrap()
                             .guild()
                             .unwrap();
-                        if memes.list().is_empty() {
+                        if memes.list().len() - 1 == 0 {
                             channel
                                 .send_message(&ctx.http, |m| {
                                     m.add_embed(|e| {
@@ -373,13 +372,10 @@ It won with a resounding {most_reactions} votes.
 I've reset the entries, so post your best memes and perhaps next \
 week you'll win? 😉
 
-You've got until {}.",
+You've got until <t:{}:F>.",
                                         victor.author.mention(),
                                         victor.link(),
-                                        memes
-                                            .next_reset()
-                                            .with_timezone(&chrono::Local)
-                                            .format(DATE_FMT),
+                                        memes.next_reset().timestamp(),
                                     )),
                                 )
                                 .await
@@ -394,11 +390,8 @@ There weren't any votes (reactions), so there's no winner. Sadge.
 
 I've reset the entries, so can you, like, _do something_ this week?
 
-You've got until {}.",
-                                        memes
-                                            .next_reset()
-                                            .with_timezone(&chrono::Local)
-                                            .format(DATE_FMT)
+You've got until <t:{}:F>.",
+                                        memes.next_reset().timestamp()
                                     )),
                                 )
                                 .await
