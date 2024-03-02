@@ -256,7 +256,7 @@ Announcement text: {}",
                     let data = crate::acquire_data_handle!(read ctx);
                     if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
                         if let Some(timeouts) = guild.timeouts() {
-                            let mut entries = timeouts.iter().map(|(uid, utd)| (uid.clone(), utd.clone())).collect::<Vec<(String, UserTimeoutData)>>();
+                            let mut entries = timeouts.iter().map(|(uid, utd)| (uid.clone(), *utd)).collect::<Vec<(String, UserTimeoutData)>>();
                             entries.sort_unstable_by(sort_by);
                             let iter = entries.iter().take(10);
                             users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {

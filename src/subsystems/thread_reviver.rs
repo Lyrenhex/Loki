@@ -62,7 +62,7 @@ impl ThreadReviver {
                             }
                         }
                         Err(error) => {
-                            let vector = channel_errors.entry(error.to_string()).or_insert(vec![]);
+                            let vector = channel_errors.entry(error.to_string()).or_default();
                             vector.push(ChannelError {
                                 public: false,
                                 channel: channel.name.clone(),
@@ -79,7 +79,7 @@ impl ThreadReviver {
                             }
                         }
                         Err(error) => {
-                            let vector = channel_errors.entry(error.to_string()).or_insert(vec![]);
+                            let vector = channel_errors.entry(error.to_string()).or_default();
                             vector.push(ChannelError {
                                 public: true,
                                 channel: channel.name,

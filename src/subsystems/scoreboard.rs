@@ -49,17 +49,10 @@ impl Scoreboard {
         let mut entries = self
             .scores
             .iter()
-            .filter_map(|(uid, count)| {
-                let uid = uid.parse::<u64>().ok();
-                if let Some(uid) = uid {
-                    Some((uid, count))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(uid, count)| uid.parse::<u64>().ok().map(|uid| (uid, count)))
             .map(|(uid, count)| (uid.into(), *count))
             .collect::<Vec<(UserId, i64)>>();
-        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_b.cmp(&cnt_a));
+        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_b.cmp(cnt_a));
         entries
             .into_iter()
             .enumerate()
@@ -84,7 +77,7 @@ pub struct ScoreboardData {
 
 impl ScoreboardData {
     pub async fn set_ephemeral_commands(&mut self, ctx: &Context, g: &GuildId) -> crate::Result {
-        if self.scoreboards.len() == 0 {
+        if self.scoreboards.is_empty() {
             if let Some(cid) = self.ephemeral_command_id {
                 self.ephemeral_command_id = None;
                 g.delete_application_command(&ctx.http, cid).await?;
@@ -103,7 +96,7 @@ impl ScoreboardData {
                     .scoreboards
                     .keys()
                     .take(NUM_SCOREBOARDS)
-                    .map(|k| k.clone())
+                    .cloned()
                     .collect::<ArrayVec<[String; NUM_SELECTABLES]>>();
                 v.sort();
                 v

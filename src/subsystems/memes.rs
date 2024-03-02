@@ -139,7 +139,7 @@ I won't see them anymore. :("
             PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
             Some(Box::new(move |ctx, command| {
                 Box::pin(async {
-                    let mut resp = create_raw_embed(format!("**Top 10 Memesters**"));
+                    let mut resp = create_raw_embed("**Top 10 Memesters**".to_string());
                     let mut users = String::new();
                     let mut counts = String::new();
                     let data = crate::acquire_data_handle!(read ctx);
@@ -149,7 +149,7 @@ I won't see them anymore. :("
                             .iter()
                             .map(|(uid, count)| (uid.clone(), *count))
                             .collect::<Vec<(String, u32)>>();
-                        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_b.cmp(&cnt_a));
+                        entries.sort_unstable_by(|(_, cnt_a), (_, cnt_b)| cnt_b.cmp(cnt_a));
                         let iter = entries.iter().take(10);
                         users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
                             Ok::<String, crate::Error>(

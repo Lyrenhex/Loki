@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr, time::Duration};
 
 use chrono::{Datelike, TimeZone};
-use log::{error, info};
+use log::{error, info, warn};
 use rand::{
     distributions::Distribution,
     seq::{IteratorRandom, SliceRandom},
@@ -461,19 +461,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                         continue;
                                     }
                                 }
-                                #[cfg(feature = "events")]
-                                notify_subscribers_with_handle(
-                                    &ctx,
-                                    &data,
-                                    Event::Error,
-                                    &format!(
-                                        "**[Guild: {}] Error changing {}'s nickname:**
-{e}",
-                                        g.id, user.id,
-                                    ),
-                                )
-                                .await;
-                                error!(
+                                warn!(
                                     "[Guild: {}] Error changing {}'s nickname:
 {e}",
                                     g.id, user.id
