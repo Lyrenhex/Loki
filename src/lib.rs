@@ -144,7 +144,11 @@ Currently enabled features: {}",
 pub async fn run() {
     env_logger::init();
 
-    info!("Starting up...");
+    info!(
+        "Starting up on version {VERSION} with enabled features:
+{}",
+        features()
+    );
 
     let config = Config::load();
 
