@@ -27,9 +27,9 @@ type ActionRoutine = Box<
     dyn (for<'b> Fn(
             &'b Context,
             &'b mut ApplicationCommandInteraction,
-        )
-            -> Pin<Box<dyn std::future::Future<Output = crate::Result> + Send + Sync + 'b>>)
-        + Sync
+        ) -> Pin<
+            Box<dyn std::future::Future<Output = crate::Result<()>> + Send + Sync + 'b>,
+        >) + Sync
         + Send,
 >;
 
@@ -156,7 +156,7 @@ impl<'a> Command<'a> {
         &self,
         ctx: &Context,
         command: &mut ApplicationCommandInteraction,
-    ) -> crate::Result {
+    ) -> crate::Result<()> {
         if let Some(action) = &*self.action {
             (action)(ctx, command).await
         } else {

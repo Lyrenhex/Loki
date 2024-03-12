@@ -41,8 +41,8 @@ impl Scoreboard {
         }
     }
 
-    pub fn set_user(&mut self, user: &UserId, score: i64) {
-        self.scores.insert(user.to_string(), score);
+    pub fn set_user(&mut self, user: &UserId, score: i64) -> Option<i64> {
+        self.scores.insert(user.to_string(), score)
     }
 
     fn _scores(&self) -> Vec<(usize, UserId, i64)> {
@@ -76,7 +76,11 @@ pub struct ScoreboardData {
 }
 
 impl ScoreboardData {
-    pub async fn set_ephemeral_commands(&mut self, ctx: &Context, g: &GuildId) -> crate::Result {
+    pub async fn set_ephemeral_commands(
+        &mut self,
+        ctx: &Context,
+        g: &GuildId,
+    ) -> crate::Result<()> {
         if self.scoreboards.is_empty() {
             if let Some(cid) = self.ephemeral_command_id {
                 self.ephemeral_command_id = None;
@@ -215,10 +219,14 @@ impl ScoreboardData {
         self.scoreboards.get(name)
     }
 
-    pub fn update_scoreboard(&mut self, name: &String, user: &UserId, score: i64) -> crate::Result {
+    pub fn update_scoreboard(
+        &mut self,
+        name: &String,
+        user: &UserId,
+        score: i64,
+    ) -> crate::Result<Option<i64>> {
         if let Some(sb) = self.scoreboards.get_mut(name) {
-            sb.set_user(user, score);
-            Ok(())
+            Ok(sb.set_user(user, score))
         } else {
             Err(crate::Error::InvalidParam(format!(
                 "Scoreboard {name} does not exist."
@@ -231,7 +239,7 @@ impl ScoreboardData {
         name: &String,
         ctx: &Context,
         g: &GuildId,
-    ) -> crate::Result {
+    ) -> crate::Result<()> {
         self.scoreboards.remove(name);
         self.set_ephemeral_commands(ctx, g).await?;
         Ok(())
@@ -405,7 +413,7 @@ impl Subsystem for Scoreboards {
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
                             let guild = config.guild_mut(&command.guild_id.unwrap());
-                            guild.scoreboards_mut().update_scoreboard(
+                            let prev = guild.scoreboards_mut().update_scoreboard(
                                 name,
                                 &command.user.id,
                                 score,
@@ -414,8 +422,13 @@ impl Subsystem for Scoreboards {
                             crate::drop_data_handle!(data);
                             let resp = format!(
                                 "**Updated scoreboard `{name}`**
-{} has updated their score to `{score}`.",
-                                command.user.mention()
+{} has updated their score to `{score}`{}.",
+                                command.user.mention(),
+                                if let Some(prev) = prev {
+                                    format!(" (was `{prev}`)")
+                                } else {
+                                    String::new()
+                                }
                             );
                             create_response(&ctx.http, command, &resp, false).await;
                             Ok(())
@@ -452,16 +465,21 @@ impl Subsystem for Scoreboards {
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
                             let guild = config.guild_mut(&command.guild_id.unwrap());
-                            guild
+                            let prev = guild
                                 .scoreboards_mut()
                                 .update_scoreboard(name, &user.id, score)?;
                             config.save();
                             crate::drop_data_handle!(data);
                             let resp = format!(
                                 "**Updated scoreboard `{name}`**
-{} has overridden {}'s score to `{score}`.",
+{} has overridden {}'s score to `{score}`{}.",
                                 command.user.mention(),
                                 user.mention(),
+                                if let Some(prev) = prev {
+                                    format!(" (was `{prev}`)")
+                                } else {
+                                    String::new()
+                                }
                             );
                             create_response(&ctx.http, command, &resp, false).await;
                             Ok(())

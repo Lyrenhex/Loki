@@ -47,7 +47,7 @@ macro_rules! drop_data_handle {
 pub(crate) use acquire_data_handle;
 pub(crate) use drop_data_handle;
 
-pub type Result = core::result::Result<(), Error>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Construct a string list describing the enabled features.
 fn features() -> String {
