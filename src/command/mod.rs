@@ -6,11 +6,10 @@ pub use util::*;
 use std::{pin::Pin, sync::Arc};
 
 use serenity::{
+    all::{CommandDataOption, CreateEmbed},
     model::{
-        prelude::{
-            command::CommandOptionType,
-            interaction::application_command::ApplicationCommandInteraction, ChannelType,
-        },
+        application::{CommandInteraction, CommandOptionType},
+        prelude::ChannelType,
         Permissions,
     },
     prelude::Context,
@@ -26,12 +25,36 @@ pub const NUM_SELECTABLES: usize = 25;
 type ActionRoutine = Box<
     dyn (for<'b> Fn(
             &'b Context,
-            &'b mut ApplicationCommandInteraction,
+            &'b mut CommandInteraction,
+            &'b Vec<CommandDataOption>,
         ) -> Pin<
-            Box<dyn std::future::Future<Output = crate::Result<()>> + Send + Sync + 'b>,
+            Box<
+                dyn std::future::Future<Output = crate::Result<std::option::Option<ActionResponse>>>
+                    + Send
+                    + 'b,
+            >,
         >) + Sync
         + Send,
 >;
+
+pub struct ActionResponse {
+    embed: CreateEmbed,
+    ephemeral: bool,
+}
+
+impl ActionResponse {
+    pub fn new(embed: CreateEmbed, ephemeral: bool) -> Self {
+        Self { embed, ephemeral }
+    }
+
+    pub fn embed(self) -> CreateEmbed {
+        self.embed
+    }
+
+    pub fn ephemeral(&self) -> bool {
+        self.ephemeral
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PermissionType {
@@ -155,10 +178,11 @@ impl<'a> Command<'a> {
     pub async fn run(
         &self,
         ctx: &Context,
-        command: &mut ApplicationCommandInteraction,
-    ) -> crate::Result<()> {
+        command: &mut CommandInteraction,
+        params: &Vec<CommandDataOption>,
+    ) -> crate::Result<std::option::Option<ActionResponse>> {
         if let Some(action) = &*self.action {
-            (action)(ctx, command).await
+            (action)(ctx, command, params).await
         } else {
             Err(Error::MissingActionRoutine)
         }

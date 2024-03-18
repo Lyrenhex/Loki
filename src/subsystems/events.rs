@@ -5,9 +5,9 @@ use serenity::{async_trait, model::prelude::Ready, prelude::Context};
 use tinyvec::ArrayVec;
 
 use crate::{
-    command::{create_response, notify_subscribers, Command, Option, OptionType, PermissionType},
+    command::{notify_subscribers, Command, Option, OptionType, PermissionType},
     config::Config,
-    Error,
+    create_raw_embed, ActionResponse, Error,
 };
 
 use super::Subsystem;
@@ -72,42 +72,26 @@ impl Subsystem for Events {
                 "subscribe",
                 "Subscribe to a bot event. Some events may be restricted.",
                 PermissionType::Universal,
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
-                        let event = command.data.options[0]
-                            .options
-                            .iter()
-                            .find(|opt| opt.name == "event")
-                            .unwrap()
-                            .value
-                            .as_ref()
-                            .unwrap()
-                            .as_str()
-                            .unwrap();
-                        let event = Event::from_str(event)?;
+                        let event = get_param!(params, String, "event");
+                        let event = Event::from_str(&event)?;
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
-                        if !subscribers.contains(&command.user.id) {
+                        Ok(Some(if !subscribers.contains(&command.user.id) {
                             subscribers.push(command.user.id);
                             config.save();
-                            create_response(
-                                &ctx.http,
-                                command,
-                                &format!("Successfully subscribed to {event}."),
+                            ActionResponse::new(
+                                create_raw_embed(&format!("Successfully subscribed to {event}.")),
                                 true,
                             )
-                            .await;
                         } else {
-                            create_response(
-                                &ctx.http,
-                                command,
-                                &format!("You're already subscribed to {event}."),
+                            ActionResponse::new(
+                                create_raw_embed(&format!("You're already subscribed to {event}.")),
                                 true,
                             )
-                            .await;
-                        }
-                        Ok(())
+                        }))
                     })
                 })),
             )
@@ -123,42 +107,28 @@ impl Subsystem for Events {
                 "unsubscribe",
                 "Unsubscribe from a bot event.",
                 PermissionType::Universal,
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
-                        let event = command.data.options[0]
-                            .options
-                            .iter()
-                            .find(|opt| opt.name == "event")
-                            .unwrap()
-                            .value
-                            .as_ref()
-                            .unwrap()
-                            .as_str()
-                            .unwrap();
-                        let event = Event::from_str(event)?;
+                        let event = get_param!(params, String, "event");
+                        let event = Event::from_str(&event)?;
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
-                        if subscribers.contains(&command.user.id) {
+                        Ok(Some(if subscribers.contains(&command.user.id) {
                             subscribers.retain(|u| *u != command.user.id);
                             config.save();
-                            create_response(
-                                &ctx.http,
-                                command,
-                                &format!("Successfully unsubscribed from {event}."),
+                            ActionResponse::new(
+                                create_raw_embed(&format!(
+                                    "Successfully unsubscribed from {event}."
+                                )),
                                 true,
                             )
-                            .await;
                         } else {
-                            create_response(
-                                &ctx.http,
-                                command,
-                                &format!("You aren't subscribed to {event}."),
+                            ActionResponse::new(
+                                create_raw_embed(&format!("You aren't subscribed to {event}.")),
                                 true,
                             )
-                            .await;
-                        }
-                        Ok(())
+                        }))
                     })
                 })),
             )

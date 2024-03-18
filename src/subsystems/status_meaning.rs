@@ -1,9 +1,13 @@
-use serenity::futures::StreamExt;
-use serenity::prelude::Mentionable;
+use std::time::Duration;
+
+use serenity::all::{
+    ActionRowComponent, CacheHttp as _, CreateActionRow, CreateModal, Mentionable as _,
+};
 
 use crate::config::Config;
 
-use crate::command::{self, create_response, Command, PermissionType};
+use crate::command::{self, Command, PermissionType};
+use crate::{create_raw_embed, ActionResponse};
 
 use super::Subsystem;
 
@@ -16,54 +20,50 @@ impl Subsystem for StatusMeaning {
                 "set_status_meaning",
                 "Manager-only: sets the meaning of the manager's Discord status.",
                 PermissionType::Universal,
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, command, _params| {
                     Box::pin(async move {
                         let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
-                        let manager = config.get_manager().to_user(&ctx.http).await?;
+                        let manager = config.get_manager().to_user(&ctx.http()).await?;
                         if command.user != manager {
                             let resp =
                                 format!("**Unauthorised:** You're not {}!", manager.mention());
-                            create_response(&ctx.http, command, &resp, true).await;
-                            return Ok(());
+                            return Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)));
                         }
 
-                        let mut meaning = serenity::builder::CreateInputText::default();
-                        meaning
-                            .label("Discord status meaning")
-                            .custom_id("new_status_meaning")
-                            .style(serenity::model::prelude::component::InputTextStyle::Paragraph)
-                            .placeholder("Some meaning here, or leave blank to unset.")
-                            .required(false);
+                        let mut meaning = serenity::builder::CreateInputText::new(
+                            serenity::all::InputTextStyle::Paragraph,
+                            "Discord status meaning",
+                            "new_status_meaning",
+                        )
+                        .placeholder("Some meaning here, or leave blank to unset.")
+                        .required(false);
                         if let Some(old_meaning) = config.get_status_meaning() {
-                            meaning.value(old_meaning);
+                            meaning = meaning.value(old_meaning);
                         }
                         crate::drop_data_handle!(data);
 
-                        let mut components = serenity::builder::CreateComponents::default();
-                        components.create_action_row(|r| r.add_input_text(meaning));
+                        let components = vec![CreateActionRow::InputText(meaning)];
 
                         command
-                            .create_interaction_response(&ctx.http, |r| {
-                                r.kind(
-                                    serenity::model::application::interaction::InteractionResponseType::Modal,
-                                );
-                                r.interaction_response_data(|d| {
-                                    d.title("Set Discord status meaning")
-                                        .custom_id("set_status_meaning")
-                                        .set_components(components)
-                                })
-                            })
+                            .create_response(
+                                &ctx.http(),
+                                serenity::all::CreateInteractionResponse::Modal(
+                                    CreateModal::new(
+                                        "set_status_meaning",
+                                        "Set Discord status meaning",
+                                    )
+                                    .components(components),
+                                ),
+                            )
                             .await?;
 
                         // collect the submitted data
-                        let collector =
-                            serenity::collector::ModalInteractionCollectorBuilder::new(ctx)
-                                .filter(|int| int.data.custom_id == "set_status_meaning")
-                                .collect_limit(1)
-                                .build();
-
-                        collector.then(|int| async move {
+                        if let Some(int) = serenity::collector::ModalInteractionCollector::new(ctx)
+                            .filter(|int| int.data.custom_id == "set_status_meaning")
+                            .timeout(Duration::new(300, 0))
+                            .await
+                        {
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
 
@@ -75,28 +75,28 @@ impl Subsystem for StatusMeaning {
                                 .collect();
 
                             for input in inputs.iter() {
-                                if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
+                                if let ActionRowComponent::InputText(it) = input {
                                     if it.custom_id == "new_status_meaning" {
-                                        if !it.value.is_empty() {
-                                            config.set_status_meaning(Some(it.value.clone()));
-                                        } else {
-                                            config.set_status_meaning(None);
+                                        if let Some(it) = &it.value {
+                                            if !it.is_empty() {
+                                                config.set_status_meaning(Some(it.clone()));
+                                            } else {
+                                                config.set_status_meaning(None);
+                                            }
                                         }
                                     }
                                 }
                             }
 
                             // it's now safe to close the modal, so send a response to it
-                            int.create_interaction_response(&ctx.http, |r| {
-                                r.kind(serenity::model::prelude::interaction::InteractionResponseType::DeferredUpdateMessage)
-                            })
-                            .await
-                            .ok();
-                        })
-                        .collect::<Vec<_>>()
-                        .await;
+                            int.create_response(
+                                &ctx.http(),
+                                serenity::all::CreateInteractionResponse::Acknowledge,
+                            )
+                            .await?;
+                        }
 
-                        Ok(())
+                        Ok(None)
                     })
                 })),
             ),
@@ -104,11 +104,11 @@ impl Subsystem for StatusMeaning {
                 "status_meaning",
                 "Retrieves the meaning of the bot managers's current Discord status.",
                 command::PermissionType::Universal,
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, _command, _params| {
                     Box::pin(async {
                         let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
-                        let manager = config.get_manager().to_user(&ctx.http).await?.mention();
+                        let manager = config.get_manager().to_user(&ctx.http()).await?.mention();
                         let resp = match config.get_status_meaning() {
                             Some(meaning) => format!(
                                 "**Status meaning:**
@@ -124,8 +124,7 @@ Assuming there _is_, in fact, a status message, you likely need to \
 prod {manager} to update this."
                             ),
                         };
-                        create_response(&ctx.http, command, &resp, false).await;
-                        Ok(())
+                        Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
                     })
                 })),
             ),

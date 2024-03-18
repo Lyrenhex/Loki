@@ -5,9 +5,10 @@ mod serenity_handler;
 mod subsystems;
 
 pub use log::{error, info};
+use serenity::all::CacheHttp as _;
 pub use serenity::{
+    model::Colour,
     prelude::{GatewayIntents, Mentionable},
-    utils::Colour,
 };
 
 pub use command::{Command, *};
@@ -79,7 +80,7 @@ start streaming (excluding server owner).";
         features += "\n**•** Randomised, automatic nickname changing.";
     }
     if cfg!(feature = "scoreboard") {
-        features += "\n **•** Scoreboards.";
+        features += "\n**•** Scoreboards.";
     }
 
     features
@@ -106,7 +107,7 @@ fn generate_commands() -> Vec<Command<'static>> {
         "about",
         "Provides information about Loki.",
         command::PermissionType::Universal,
-        Some(Box::new(move |ctx, command| {
+        Some(Box::new(move |ctx, _command, _params| {
             Box::pin(async {
                 let manager_tag = ctx
                     .data
@@ -115,13 +116,11 @@ fn generate_commands() -> Vec<Command<'static>> {
                     .get::<Config>()
                     .unwrap()
                     .get_manager()
-                    .to_user(&ctx.http)
+                    .to_user(&ctx.http())
                     .await?
                     .mention();
-                command::create_response(
-                    &ctx.http,
-                    command,
-                    &format!(
+                Ok(Some(ActionResponse::new(
+                    create_raw_embed(&format!(
                         "Loki is a trickster ~~god~~ bot.
 Version [{VERSION}]({GITHUB_URL}/releases/tag/v{VERSION}); [source code]({GITHUB_URL}).
 
@@ -129,11 +128,9 @@ This instance of Loki is managed by {manager_tag}.
 
 Currently enabled features: {}",
                         features()
-                    ),
+                    )),
                     false,
-                )
-                .await;
-                Ok(())
+                )))
             })
         })),
     )];
