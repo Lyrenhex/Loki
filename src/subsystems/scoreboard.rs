@@ -277,7 +277,7 @@ impl Subsystem for Scoreboards {
                             format!("**Created new scoreboard `{name}`!**")
                         };
                         crate::drop_data_handle!(data);
-                        Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                        Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                     })
                 })),
             )
@@ -303,7 +303,7 @@ impl Subsystem for Scoreboards {
                             config.save();
                             crate::drop_data_handle!(data);
                             let resp = format!("**Deleted scoreboard `{name}`.**");
-                            Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 ))
@@ -317,14 +317,14 @@ impl Subsystem for Scoreboards {
                             let mut scores = String::new();
                             let data = crate::acquire_data_handle!(read ctx);
                             if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
-                                let scoreboard = guild.scoreboards().scoreboard(&name).ok_or(
+                                let scoreboard = guild.scoreboards().scoreboard(name).ok_or(
                                     crate::Error::InvalidParam(format!(
                                         "Scoreboard {name} does not exist!"
                                     )),
                                 )?;
                                 if params.len() > 1 {
                                     let user = get_param!(params, User, "user");
-                                    let user = command.data.resolved.users.get(&user).unwrap();
+                                    let user = command.data.resolved.users.get(user).unwrap();
                                     if let Some((p, _, s)) = scoreboard.score(&user.id) {
                                         positions = p.to_string();
                                         users = user.mention().to_string();
@@ -390,7 +390,7 @@ impl Subsystem for Scoreboards {
                                     String::new()
                                 }
                             );
-                            Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 ))
@@ -400,7 +400,7 @@ impl Subsystem for Scoreboards {
                         Box::pin(async {
                             let name = get_param!(params, String, "name");
                             let user = get_param!(params, User, "user");
-                            let user = command.data.resolved.users.get(&user).unwrap();
+                            let user = command.data.resolved.users.get(user).unwrap();
                             let score = *get_param!(params, Integer, "score");
 
                             let mut data = crate::acquire_data_handle!(write ctx);
@@ -422,7 +422,7 @@ impl Subsystem for Scoreboards {
                                     String::new()
                                 }
                             );
-                            Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 )),

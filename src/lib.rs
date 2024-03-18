@@ -120,7 +120,7 @@ fn generate_commands() -> Vec<Command<'static>> {
                     .await?
                     .mention();
                 Ok(Some(ActionResponse::new(
-                    create_raw_embed(&format!(
+                    create_raw_embed(format!(
                         "Loki is a trickster ~~god~~ bot.
 Version [{VERSION}]({GITHUB_URL}/releases/tag/v{VERSION}); [source code]({GITHUB_URL}).
 

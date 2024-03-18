@@ -28,7 +28,7 @@ impl Subsystem for StatusMeaning {
                         if command.user != manager {
                             let resp =
                                 format!("**Unauthorised:** You're not {}!", manager.mention());
-                            return Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)));
+                            return Ok(Some(ActionResponse::new(create_raw_embed(resp), true)));
                         }
 
                         let mut meaning = serenity::builder::CreateInputText::new(

@@ -111,7 +111,7 @@ impl Subsystem for TimeoutMonitor {
                             }
                         }
                     }
-                    Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                    Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                 })
             })),
         )
@@ -178,7 +178,7 @@ Channel: {}
 Announcement text: {}",
                         announcements_config.channel().to_channel(&ctx.http()).await?,
                         announcements_config.announcement_text());
-                    Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)))
+                    Ok(Some(ActionResponse::new(create_raw_embed(resp), true)))
                 })
             })),
         )

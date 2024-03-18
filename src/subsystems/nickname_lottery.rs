@@ -142,7 +142,7 @@ impl Subsystem for NicknameLottery {
                 Some(Box::new(move |ctx, command, params| {
                     Box::pin(async move {
                         let user = get_param!(params, User, "user");
-                        let user = command.data.resolved.users.get(&user).unwrap();
+                        let user = command.data.resolved.users.get(user).unwrap();
                         let guild_id = command.guild_id.unwrap();
 
                         let data = crate::acquire_data_handle!(read ctx);
@@ -292,7 +292,7 @@ Title text: {}",
                                 .await?,
                             lottery_data.title()
                         );
-                        Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)))
+                        Ok(Some(ActionResponse::new(create_raw_embed(resp), true)))
                     })
                 })),
             )

@@ -38,13 +38,13 @@ impl Subsystem for TextResponse {
                                 let mut resp = format!("**{} activation phrase(s):**", response_map.keys().count());
                                 response_map.keys().for_each(|phrase| resp += format!("\n•\t{phrase}").as_str());
                                 crate::drop_data_handle!(data);
-                                return Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)));
+                                Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)))
                             } else {
-                                return Ok(Some(ActionResponse::new(create_raw_embed("**No activation phrases.**
-Perhaps try adding some?"), true)));
+                                Ok(Some(ActionResponse::new(create_raw_embed("**No activation phrases.**
+Perhaps try adding some?"), true)))
                             }
                         } else {
-                            return Err(Error::InvalidChannel);
+                            Err(Error::InvalidChannel)
                         }
                     })
                 })),

@@ -75,7 +75,7 @@ impl Subsystem for Events {
                 Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
                         let event = get_param!(params, String, "event");
-                        let event = Event::from_str(&event)?;
+                        let event = Event::from_str(event)?;
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
@@ -83,12 +83,12 @@ impl Subsystem for Events {
                             subscribers.push(command.user.id);
                             config.save();
                             ActionResponse::new(
-                                create_raw_embed(&format!("Successfully subscribed to {event}.")),
+                                create_raw_embed(format!("Successfully subscribed to {event}.")),
                                 true,
                             )
                         } else {
                             ActionResponse::new(
-                                create_raw_embed(&format!("You're already subscribed to {event}.")),
+                                create_raw_embed(format!("You're already subscribed to {event}.")),
                                 true,
                             )
                         }))
@@ -110,7 +110,7 @@ impl Subsystem for Events {
                 Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
                         let event = get_param!(params, String, "event");
-                        let event = Event::from_str(&event)?;
+                        let event = Event::from_str(event)?;
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let subscribers = config.subscribers_mut(event);
@@ -118,14 +118,14 @@ impl Subsystem for Events {
                             subscribers.retain(|u| *u != command.user.id);
                             config.save();
                             ActionResponse::new(
-                                create_raw_embed(&format!(
+                                create_raw_embed(format!(
                                     "Successfully unsubscribed from {event}."
                                 )),
                                 true,
                             )
                         } else {
                             ActionResponse::new(
-                                create_raw_embed(&format!("You aren't subscribed to {event}.")),
+                                create_raw_embed(format!("You aren't subscribed to {event}.")),
                                 true,
                             )
                         }))

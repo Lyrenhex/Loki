@@ -280,7 +280,7 @@ impl<'a> SerenityHandler<'a> {
         Self { commands }
     }
 
-    pub(crate) fn create_variant<'b>(variant: &crate::Command) -> CreateCommandOption {
+    pub(crate) fn create_variant(variant: &crate::Command) -> CreateCommandOption {
         let mut subcmd = CreateCommandOption::new(
             CommandOptionType::SubCommand,
             variant.name(),
