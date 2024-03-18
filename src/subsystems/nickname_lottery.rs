@@ -8,15 +8,9 @@ use rand::{
 };
 use serde::{Deserialize, Serialize};
 use serenity::{
+    all::{CacheHttp as _, CommandDataOptionValue, CreateModal, Guild, Mentionable as _, UserId},
     async_trait,
-    futures::StreamExt,
-    model::{
-        channel::ChannelType,
-        id::ChannelId,
-        mention::Mentionable,
-        prelude::{interaction::application_command::CommandDataOptionValue, Guild, UserId},
-        Permissions,
-    },
+    model::{channel::ChannelType, id::ChannelId, Permissions},
     prelude::Context,
 };
 
@@ -24,8 +18,8 @@ use serenity::{
 use crate::{command::notify_subscribers, subsystems::events::Event};
 
 use crate::{
-    command::OptionType, config::Config, create_embed, create_response,
-    notify_subscribers_with_handle,
+    command::OptionType, config::Config, create_embed, create_raw_embed,
+    notify_subscribers_with_handle, ActionResponse,
 };
 use crate::{
     command::{Command, PermissionType},
@@ -34,7 +28,7 @@ use crate::{
 
 use super::Subsystem;
 
-// (30 mins, 5 days) in seconds.
+/// (30 mins, 5 days) in seconds.
 const REFRESH_INTERVAL: (u64, u64) = (1_800, 432_000);
 
 #[derive(Default)]
@@ -103,7 +97,7 @@ impl NicknameLotteryGuildData {
         self.user_specific_nicknames
             .keys()
             .choose(&mut rand::thread_rng())
-            .map(|id| UserId(u64::from_str(id).unwrap()))
+            .map(|id| UserId::new(u64::from_str(id).unwrap()))
     }
 
     /// Set the complaints channel.
@@ -134,179 +128,192 @@ impl NicknameLotteryGuildData {
 #[async_trait]
 impl Subsystem for NicknameLottery {
     fn generate_commands(&self) -> Vec<Command<'static>> {
-        vec![
+        vec![Command::new(
+            "nickname_lottery",
+            "Controls for the nickname lottery.",
+            PermissionType::ServerPerms(Permissions::MANAGE_NICKNAMES),
+            None,
+        )
+        .add_variant(
             Command::new(
-                "nickname_lottery",
-                "Controls for the nickname lottery.",
+                "set_nicknames",
+                "Set the list of nicknames that can be applied to a specific user.",
                 PermissionType::ServerPerms(Permissions::MANAGE_NICKNAMES),
-                None,
-            )
-            .add_variant(
-                Command::new(
-                    "set_nicknames",
-                    "Set the list of nicknames that can be applied to a specific user.",
-                    PermissionType::ServerPerms(Permissions::MANAGE_NICKNAMES),
-                    Some(Box::new(move |ctx, command| {
-                        Box::pin(async move {
-                            let user = command.data.options[0].options.iter().find(|opt| opt.name == "user").and_then(|u| {
-                                if let Some(CommandDataOptionValue::User(user, _)) = &u.resolved {
-                                    Some(user.clone())
-                                } else {
-                                    None
-                                }
-                            }).unwrap();
-                            let guild_id = command.guild_id.unwrap();
+                Some(Box::new(move |ctx, command, params| {
+                    Box::pin(async move {
+                        let user = get_param!(params, User, "user");
+                        let user = command.data.resolved.users.get(user).unwrap();
+                        let guild_id = command.guild_id.unwrap();
 
-                            let data = crate::acquire_data_handle!(read ctx);
-                            let guild = get_guild(&data, &guild_id).unwrap();
-                            let nickname_lottery_data = guild.nickname_lottery_data();
+                        let data = crate::acquire_data_handle!(read ctx);
+                        let guild = get_guild(&data, &guild_id).unwrap();
+                        let nickname_lottery_data = guild.nickname_lottery_data();
 
-                            let old_nicknames = nickname_lottery_data.user_nicknames_string(&user.id);
+                        info!(
+                            "[Guild: {}] Updating nickname list for {} ({})",
+                            guild_id, user.name, user.id
+                        );
 
-                            let mut input_nicks = serenity::builder::CreateInputText::default();
-                            input_nicks
-                                .label("Nicknames list")
-                                .custom_id("nicknames_list")
-                                .style(serenity::model::prelude::component::InputTextStyle::Paragraph)
-                                .placeholder("List of nicknames, each on a new line (or blank to unset).")
-                                .required(false)
-                                .value(old_nicknames);
-                            crate::drop_data_handle!(data);
+                        let old_nicknames = nickname_lottery_data.user_nicknames_string(&user.id);
 
-                            let mut components = serenity::builder::CreateComponents::default();
-                            components.create_action_row(|r| r.add_input_text(input_nicks));
+                        let input_nicks = serenity::builder::CreateInputText::new(
+                            serenity::all::InputTextStyle::Paragraph,
+                            "Nicknames list",
+                            "nicknames_list",
+                        )
+                        .placeholder("List of nicknames, each on a new line (or blank to unset).")
+                        .required(false)
+                        .value(old_nicknames);
+                        crate::drop_data_handle!(data);
 
-                            command
-                                .create_interaction_response(&ctx.http, |r| {
-                                    r.kind(
-                                        serenity::model::application::interaction::InteractionResponseType::Modal,
-                                    );
-                                    r.interaction_response_data(|d| {
-                                        d.title(format!("{}'s nicknames",
-                                            user.name
-                                        ))
-                                        .custom_id(user.id.to_string() + "_set_nicknames")
-                                        .set_components(components)
-                                    })
-                                })
-                                .await?;
+                        let components =
+                            vec![serenity::all::CreateActionRow::InputText(input_nicks)];
 
-                            let userid = user.id;
-                            // collect the submitted data
-                            let collector =
-                                serenity::collector::ModalInteractionCollectorBuilder::new(ctx)
-                                    .filter(move |int| int.data.custom_id == userid.to_string() + "_set_nicknames")
-                                    .collect_limit(1)
-                                    .build();
+                        command
+                            .create_response(
+                                &ctx.http(),
+                                serenity::all::CreateInteractionResponse::Modal(
+                                    CreateModal::new(
+                                        user.id.to_string() + "_set_nicknames",
+                                        format!("{}'s nicknames", user.name),
+                                    )
+                                    .components(components),
+                                ),
+                            )
+                            .await?;
 
-                            collector.then(|int| async move {
-                                let mut data = crate::acquire_data_handle!(write ctx);
-                                let config = data.get_mut::<Config>().unwrap();
-                                let guild = config.guild_mut(&guild_id.clone());
-                                let nickname_lottery_data = guild.nickname_lottery_data_mut();
+                        let userid = user.id;
+                        // collect the submitted data
+                        if let Some(int) = serenity::collector::ModalInteractionCollector::new(ctx)
+                            .filter(move |int| {
+                                int.data.custom_id == userid.to_string() + "_set_nicknames"
+                            })
+                            .timeout(Duration::new(300, 0))
+                            .await
+                        {
+                            let mut data = crate::acquire_data_handle!(write ctx);
+                            let config = data.get_mut::<Config>().unwrap();
+                            let guild = config.guild_mut(&guild_id.clone());
+                            let nickname_lottery_data = guild.nickname_lottery_data_mut();
 
-                                let inputs: Vec<_> = int
-                                    .data
-                                    .components
-                                    .iter()
-                                    .flat_map(|r| r.components.iter())
-                                    .collect();
+                            let inputs: Vec<_> = int
+                                .data
+                                .components
+                                .iter()
+                                .flat_map(|r| r.components.iter())
+                                .collect();
 
-                                for input in inputs.iter() {
-                                    if let serenity::model::prelude::component::ActionRowComponent::InputText(it) = input {
-                                        if it.custom_id == "nicknames_list" {
-                                                nickname_lottery_data.set_user_nicknames(&user.id, &NicknameLotteryGuildData::deconstruct_nickname_string(&it.value.clone()).iter().map(|n| n.as_str()).collect::<Vec<&str>>());
+                            for input in inputs.iter() {
+                                if let serenity::all::ActionRowComponent::InputText(it) = input {
+                                    if it.custom_id == "nicknames_list" {
+                                        if let Some(it) = &it.value {
+                                            nickname_lottery_data.set_user_nicknames(
+                                            &user.id,
+                                            &NicknameLotteryGuildData::deconstruct_nickname_string(
+                                                &it.clone(),
+                                            )
+                                            .iter()
+                                            .map(|n| n.as_str())
+                                            .collect::<Vec<&str>>(),
+                                        );
                                         }
                                     }
                                 }
+                            }
 
-                                config.save();
+                            config.save();
 
-                                // it's now safe to close the modal, so send a response to it
-                                int.create_interaction_response(&ctx.http, |r| {
-                                    r.kind(serenity::model::prelude::interaction::InteractionResponseType::DeferredUpdateMessage)
-                                })
-                                .await
-                                .ok();
-                            })
-                            .collect::<Vec<_>>()
-                            .await;
+                            // it's now safe to close the modal, so send a response to it
+                            int.create_response(
+                                &ctx.http(),
+                                serenity::all::CreateInteractionResponse::Acknowledge,
+                            )
+                            .await?;
+                        }
 
-                            Ok(())
-                        })
-                    })),
-                )
-                .add_option(
-                    crate::Option::new(
-                        "user",
-                        "The user to set the nickname list for.",
-                        OptionType::User,
-                        true
-                    )
-                ),
+                        Ok(None)
+                    })
+                })),
             )
-            .add_variant(Command::new(
-            "configure_announcements",
-            "Configure announcements when the bot fails to change a user's nickname.",
-            PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-            Some(Box::new(move |ctx, command| {
-                Box::pin(async {
-                    // Set announcement channel if it's been supplied.
-                    if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
-                        let mut data = crate::acquire_data_handle!(write ctx);
-                        let config = data.get_mut::<Config>().unwrap();
-                        let guild = config.guild_mut(&command.guild_id.unwrap());
-                        if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
-                            let channel = channel.id.to_channel(&ctx.http).await?;
-                            guild.nickname_lottery_data_mut().set_complaints_channel(Some(channel.id()));
-                            config.save();
-                        }
-                    };
+            .add_option(crate::Option::new(
+                "user",
+                "The user to set the nickname list for.",
+                OptionType::User,
+                true,
+            )),
+        )
+        .add_variant(
+            Command::new(
+                "configure_announcements",
+                "Configure announcements when the bot fails to change a user's nickname.",
+                PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
+                Some(Box::new(move |ctx, command, params| {
+                    Box::pin(async {
+                        // Set announcement channel if it's been supplied.
+                        if let Some(channel_opt) = params.iter().find(|opt| opt.name == "channel") {
+                            let mut data = crate::acquire_data_handle!(write ctx);
+                            let config = data.get_mut::<Config>().unwrap();
+                            let guild = config.guild_mut(&command.guild_id.unwrap());
+                            if let CommandDataOptionValue::Channel(channel) = &channel_opt.value {
+                                let channel = channel.to_channel(&ctx.http()).await?;
+                                guild
+                                    .nickname_lottery_data_mut()
+                                    .set_complaints_channel(Some(channel.id()));
+                                config.save();
+                            }
+                        };
 
+                        // Set title override if it's been supplied.
+                        if let Some(title_opt) =
+                            params.iter().find(|opt| opt.name == "title_override")
+                        {
+                            let mut data = crate::acquire_data_handle!(write ctx);
+                            let config = data.get_mut::<Config>().unwrap();
+                            let guild = config.guild_mut(&command.guild_id.unwrap());
+                            let lottery_data = guild.nickname_lottery_data_mut();
+                            if let CommandDataOptionValue::String(title_override) = &title_opt.value
+                            {
+                                lottery_data.set_title_override(Some(title_override.to_owned()));
+                                config.save();
+                            }
+                        };
 
-                    // Set title override if it's been supplied.
-                    if let Some(title_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "title_override") {
-                        let mut data = crate::acquire_data_handle!(write ctx);
-                        let config = data.get_mut::<Config>().unwrap();
-                        let guild = config.guild_mut(&command.guild_id.unwrap());
-                        let lottery_data = guild.nickname_lottery_data_mut();
-                        if let Some(CommandDataOptionValue::String(title_override)) = &title_opt.resolved {
-                            lottery_data.set_title_override(Some(title_override.to_owned()));
-                            config.save();
-                        }
-                    };
-
-
-                    let data = crate::acquire_data_handle!(read ctx);
-                    let guild = get_guild(&data, &command.guild_id.unwrap());
-                    let lottery_data = &guild.unwrap().nickname_lottery_data();
-                    let resp = format!("**Nickname lottery complaints channel updated!**
+                        let data = crate::acquire_data_handle!(read ctx);
+                        let guild = get_guild(&data, &command.guild_id.unwrap());
+                        let lottery_data = &guild.unwrap().nickname_lottery_data();
+                        let resp = format!(
+                            "**Nickname lottery complaints channel updated!**
 Channel: {}
 Title text: {}",
-                        lottery_data.complaints_channel().unwrap().to_channel(&ctx.http).await?,
-                        lottery_data.title());
-                    create_response(&ctx.http, command, &resp, true).await;
-                    Ok(())
-                })
-            })),
+                            lottery_data
+                                .complaints_channel()
+                                .unwrap()
+                                .to_channel(&ctx.http())
+                                .await?,
+                            lottery_data.title()
+                        );
+                        Ok(Some(ActionResponse::new(create_raw_embed(resp), true)))
+                    })
+                })),
+            )
+            .add_option(crate::command::Option::new(
+                "channel",
+                "The channel to announce timeouts in.",
+                OptionType::Channel(Some(vec![ChannelType::Text])),
+                false,
+            ))
+            .add_option(crate::command::Option::new(
+                "title_override",
+                "Text to prepend before the timeout counter message.",
+                OptionType::StringInput(None, None),
+                false,
+            )),
         )
-        .add_option(crate::command::Option::new(
-            "channel",
-            "The channel to announce timeouts in.",
-            OptionType::Channel(Some(vec![ChannelType::Text])),
-            false,
-        ))
-        .add_option(crate::command::Option::new(
-            "title_override",
-            "Text to prepend before the timeout counter message.",
-            OptionType::StringInput(None, None),
-            false,
-        )))
         .add_variant(Command::new(
             "stop_announcements",
             "Stop all announcements. Unsets all configuration values.",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-            Some(Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command, _params| {
                 Box::pin(async {
                     let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
@@ -317,12 +324,13 @@ Title text: {}",
                     config.save();
                     crate::drop_data_handle!(data);
 
-                    create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
-                    Ok(())
+                    Ok(Some(ActionResponse::new(
+                        create_raw_embed("Announcements have been uninitialised."),
+                        true,
+                    )))
                 })
             })),
-        ))
-        ]
+        ))]
     }
 }
 
@@ -405,7 +413,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
             if let Some(guild) = get_guild(&data, &g.id) {
                 let lottery_data = guild.nickname_lottery_data();
                 if let Some(user) = lottery_data.get_random_user() {
-                    if let Ok(member) = g.member(&ctx.http, user).await {
+                    if let Ok(member) = g.member(&ctx.http(), user).await {
                         let user = &member.user;
                         if let Some(mut new_nick) = lottery_data.get_nickname_for_user(&user.id) {
                             let old_nick = member.display_name();
@@ -423,18 +431,22 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                 &g.id, &user.id, &new_nick, &old_nick
                             );
                             if let Err(e) = g
-                                .edit_member(&ctx.http, user.id, |m| m.nickname(&new_nick))
+                                .edit_member(
+                                    &ctx.http(),
+                                    user.id,
+                                    serenity::all::EditMember::new().nickname(&new_nick),
+                                )
                                 .await
                             {
                                 if let Some(channel_id) = lottery_data.complaints_channel() {
-                                    let channel = match channel_id.to_channel(&ctx.http).await {
+                                    let channel = match channel_id.to_channel(&ctx.http()).await {
                                         Ok(channel) => channel.guild(),
                                         Err(_) => None,
                                     };
                                     if let Some(channel) = channel {
                                         channel
                                             .send_message(
-                                                &ctx.http,
+                                                &ctx.http(),
                                                 create_embed(format!(
                                                     "**{}**
 {} won/lost the lottery! From now on, they are to be named: `{}`",

@@ -4,22 +4,22 @@ use const_format::formatcp;
 use log::{error, info, trace};
 use serde::{Deserialize, Serialize};
 use serenity::{
+    all::{CacheHttp as _, Mentionable as _},
     async_trait, futures,
     model::{
         gateway::Ready,
         guild::Guild,
         id::{CommandId, GuildId, UserId},
-        prelude::interaction::application_command::CommandDataOptionValue,
         Permissions,
     },
-    prelude::{Context, Mentionable},
+    prelude::Context,
 };
 use tinyvec::ArrayVec;
 
 use crate::{
-    command::{create_response, Command, OptionType, PermissionType},
+    command::{Command, OptionType, PermissionType},
     config::{get_guild, Config},
-    create_raw_embed, create_response_from_embed, NUM_SELECTABLES,
+    create_raw_embed, ActionResponse, NUM_SELECTABLES,
 };
 #[cfg(feature = "events")]
 use crate::{notify_subscribers, subsystems::events::Event};
@@ -84,7 +84,7 @@ impl ScoreboardData {
         if self.scoreboards.is_empty() {
             if let Some(cid) = self.ephemeral_command_id {
                 self.ephemeral_command_id = None;
-                g.delete_application_command(&ctx.http, cid).await?;
+                g.delete_command(&ctx.http(), cid).await?;
                 info!(
                     "[Guild: {}] Deleted ephemeral `scoreboard` command (id {cid})",
                     g
@@ -110,7 +110,7 @@ impl ScoreboardData {
         let command = Command::new(
             "scoreboard",
             "Track all the scores!",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
             None,
         )
         .add_variant(
@@ -126,7 +126,7 @@ impl ScoreboardData {
             Command::new(
                 "view",
                 "View the top 10 scores on the board, or a given user's score.",
-                PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+                PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
                 None,
             )
             .add_option(scoreboard_select.clone())
@@ -141,7 +141,7 @@ impl ScoreboardData {
             Command::new(
                 "set",
                 "Set your score on a board.",
-                PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+                PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
                 None,
             )
             .add_option(scoreboard_select.clone())
@@ -174,9 +174,9 @@ impl ScoreboardData {
             )),
         );
         self.ephemeral_command_id = Some(
-            g.create_application_command(
-                &ctx.http,
-                crate::serenity_handler::construct_command(command),
+            g.create_command(
+                &ctx.http(),
+                crate::serenity_handler::construct_command(&command),
             )
             .await?
             .id,
@@ -257,15 +257,9 @@ impl Subsystem for Scoreboards {
                 "create_scoreboard",
                 formatcp!("Create a new scoreboard (max. {NUM_SCOREBOARDS})."),
                 PermissionType::ServerPerms(Permissions::ADMINISTRATOR),
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
-                        let name = if let Some(CommandDataOptionValue::String(name)) =
-                            &command.data.options[0].resolved
-                        {
-                            name
-                        } else {
-                            return Err(crate::Error::InvalidParam("scoreboard name".to_string()));
-                        };
+                        let name = get_param!(params, String, "name");
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
@@ -276,15 +270,14 @@ impl Subsystem for Scoreboards {
                         {
                             format!(
                                 "**Could not create scoreboard `{name}`:**
-{e}"
+        {e}"
                             )
                         } else {
                             config.save();
                             format!("**Created new scoreboard `{name}`!**")
                         };
                         crate::drop_data_handle!(data);
-                        create_response(&ctx.http, command, &resp, false).await;
-                        Ok(())
+                        Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                     })
                 })),
             )
@@ -297,17 +290,9 @@ impl Subsystem for Scoreboards {
             Command::new_stub("scoreboard", None)
                 .add_variant(Command::new_stub(
                     "delete",
-                    Some(Box::new(move |ctx, command| {
+                    Some(Box::new(move |ctx, command, params| {
                         Box::pin(async {
-                            let name = if let Some(CommandDataOptionValue::String(name)) =
-                                &command.data.options[0].options[0].resolved
-                            {
-                                name
-                            } else {
-                                return Err(crate::Error::InvalidParam(
-                                    "scoreboard name".to_string(),
-                                ));
-                            };
+                            let name = get_param!(params, String, "name");
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
                             let guild = config.guild_mut(&command.guild_id.unwrap());
@@ -318,46 +303,32 @@ impl Subsystem for Scoreboards {
                             config.save();
                             crate::drop_data_handle!(data);
                             let resp = format!("**Deleted scoreboard `{name}`.**");
-                            create_response(&ctx.http, command, &resp, false).await;
-                            Ok(())
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 ))
                 .add_variant(Command::new_stub(
                     "view",
-                    Some(Box::new(move |ctx, command| {
+                    Some(Box::new(move |ctx, command, params| {
                         Box::pin(async {
-                            let name = if let Some(CommandDataOptionValue::String(name)) =
-                                &command.data.options[0].options[0].resolved
-                            {
-                                name.clone()
-                            } else {
-                                return Err(crate::Error::InvalidParam(
-                                    "scoreboard name".to_string(),
-                                ));
-                            };
-                            let mut resp = create_raw_embed(format!("**{name}**"));
+                            let name = get_param!(params, String, "name");
                             let mut positions = String::new();
                             let mut users = String::new();
                             let mut scores = String::new();
                             let data = crate::acquire_data_handle!(read ctx);
                             if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
-                                let scoreboard = guild.scoreboards().scoreboard(&name).ok_or(
+                                let scoreboard = guild.scoreboards().scoreboard(name).ok_or(
                                     crate::Error::InvalidParam(format!(
                                         "Scoreboard {name} does not exist!"
                                     )),
                                 )?;
-                                if command.data.options[0].options.len() > 1 {
-                                    if let Some(CommandDataOptionValue::User(user, _)) =
-                                        &command.data.options[0].options[1].resolved
-                                    {
-                                        if let Some((p, _, s)) = scoreboard.score(&user.id) {
-                                            positions = p.to_string();
-                                            users = user.mention().to_string();
-                                            scores = s.to_string();
-                                        }
-                                    } else {
-                                        return Err(crate::Error::InvalidParam("user".to_string()));
+                                if params.len() > 1 {
+                                    let user = get_param!(params, User, "user");
+                                    let user = command.data.resolved.users.get(user).unwrap();
+                                    if let Some((p, _, s)) = scoreboard.score(&user.id) {
+                                        positions = p.to_string();
+                                        users = user.mention().to_string();
+                                        scores = s.to_string();
                                     }
                                 } else {
                                     let entries = scoreboard.scores();
@@ -369,7 +340,10 @@ impl Subsystem for Scoreboards {
                                     users = futures::future::try_join_all(entries.iter().map(
                                         |(_, uid, _)| async {
                                             Ok::<String, crate::Error>(
-                                                uid.to_user(&ctx.http).await?.mention().to_string(),
+                                                uid.to_user(&ctx.http())
+                                                    .await?
+                                                    .mention()
+                                                    .to_string(),
                                             )
                                         },
                                     ))
@@ -382,34 +356,20 @@ impl Subsystem for Scoreboards {
                                         .join("\n");
                                 }
                             }
-                            resp.field("#", positions, true)
+                            let resp = create_raw_embed(format!("**{name}**"))
+                                .field("#", positions, true)
                                 .field("User", users, true)
                                 .field("Score", scores, true);
-                            create_response_from_embed(&ctx.http, command, resp, false).await;
-                            Ok(())
+                            Ok(Some(ActionResponse::new(resp, false)))
                         })
                     })),
                 ))
                 .add_variant(Command::new_stub(
                     "set",
-                    Some(Box::new(move |ctx, command| {
+                    Some(Box::new(move |ctx, command, params| {
                         Box::pin(async {
-                            let name = if let Some(CommandDataOptionValue::String(name)) =
-                                &command.data.options[0].options[0].resolved
-                            {
-                                name
-                            } else {
-                                return Err(crate::Error::InvalidParam(
-                                    "scoreboard name".to_string(),
-                                ));
-                            };
-                            let score = if let Some(CommandDataOptionValue::Integer(score)) =
-                                command.data.options[0].options[1].resolved
-                            {
-                                score
-                            } else {
-                                return Err(crate::Error::InvalidParam("score".to_string()));
-                            };
+                            let name = get_param!(params, String, "name");
+                            let score = *get_param!(params, Integer, "score");
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
                             let guild = config.guild_mut(&command.guild_id.unwrap());
@@ -422,7 +382,7 @@ impl Subsystem for Scoreboards {
                             crate::drop_data_handle!(data);
                             let resp = format!(
                                 "**Updated scoreboard `{name}`**
-{} has updated their score to `{score}`{}.",
+        {} has updated their score to `{score}`{}.",
                                 command.user.mention(),
                                 if let Some(prev) = prev {
                                     format!(" (was `{prev}`)")
@@ -430,38 +390,19 @@ impl Subsystem for Scoreboards {
                                     String::new()
                                 }
                             );
-                            create_response(&ctx.http, command, &resp, false).await;
-                            Ok(())
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 ))
                 .add_variant(Command::new_stub(
                     "override",
-                    Some(Box::new(move |ctx, command| {
+                    Some(Box::new(move |ctx, command, params| {
                         Box::pin(async {
-                            let name = if let Some(CommandDataOptionValue::String(name)) =
-                                &command.data.options[0].options[0].resolved
-                            {
-                                name
-                            } else {
-                                return Err(crate::Error::InvalidParam(
-                                    "scoreboard name".to_string(),
-                                ));
-                            };
-                            let user = if let Some(CommandDataOptionValue::User(user, _)) =
-                                &command.data.options[0].options[1].resolved
-                            {
-                                user
-                            } else {
-                                return Err(crate::Error::InvalidParam("user".to_string()));
-                            };
-                            let score = if let Some(CommandDataOptionValue::Integer(name)) =
-                                command.data.options[0].options[2].resolved
-                            {
-                                name
-                            } else {
-                                return Err(crate::Error::InvalidParam("score".to_string()));
-                            };
+                            let name = get_param!(params, String, "name");
+                            let user = get_param!(params, User, "user");
+                            let user = command.data.resolved.users.get(user).unwrap();
+                            let score = *get_param!(params, Integer, "score");
+
                             let mut data = crate::acquire_data_handle!(write ctx);
                             let config = data.get_mut::<Config>().unwrap();
                             let guild = config.guild_mut(&command.guild_id.unwrap());
@@ -472,7 +413,7 @@ impl Subsystem for Scoreboards {
                             crate::drop_data_handle!(data);
                             let resp = format!(
                                 "**Updated scoreboard `{name}`**
-{} has overridden {}'s score to `{score}`{}.",
+        {} has overridden {}'s score to `{score}`{}.",
                                 command.user.mention(),
                                 user.mention(),
                                 if let Some(prev) = prev {
@@ -481,8 +422,7 @@ impl Subsystem for Scoreboards {
                                     String::new()
                                 }
                             );
-                            create_response(&ctx.http, command, &resp, false).await;
-                            Ok(())
+                            Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                         })
                     })),
                 )),

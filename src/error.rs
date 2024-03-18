@@ -46,8 +46,8 @@ Whoops! This is _almost certainly_ a development oversight...
 Badger the bot manager about it."
             ),
             Self::SerenityError(e) => match e {
-                serenity::Error::Http(e) => match &**e {
-                    serenity::http::error::Error::UnsuccessfulRequest(resp) => {
+                serenity::Error::Http(e) => match &e {
+                    serenity::all::HttpError::UnsuccessfulRequest(resp) => {
                         if resp.status_code == serenity::http::StatusCode::FORBIDDEN {
                             write!(
                                 f,

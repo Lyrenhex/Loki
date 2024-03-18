@@ -7,7 +7,7 @@ use log::error;
 
 use serde::{Deserialize, Serialize};
 use serenity::client::{Client, ClientBuilder};
-use serenity::model::prelude::{Channel, GuildId, UserId};
+use serenity::model::prelude::{GuildId, UserId};
 use serenity::prelude::{GatewayIntents, TypeMap, TypeMapKey};
 
 #[cfg(feature = "events")]
@@ -22,6 +22,8 @@ use crate::subsystems::scoreboard::ScoreboardData;
 use crate::subsystems::timeout_monitor::{
     AnnouncementsConfig as TimeoutAnnouncementsConfig, UserTimeoutData,
 };
+#[cfg(feature = "timeout-monitor")]
+use serenity::model::prelude::Channel;
 #[cfg(feature = "memes")]
 use serenity::model::prelude::ChannelId;
 

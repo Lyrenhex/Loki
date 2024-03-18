@@ -6,6 +6,18 @@ use serenity::{
 
 use crate::command::Command;
 
+macro_rules! get_param {
+    ($params:ident, $variant:ident, $name:expr) => {
+        if let serenity::all::CommandDataOptionValue::$variant(s) =
+            &$params.iter().find(|opt| opt.name == $name).unwrap().value
+        {
+            s
+        } else {
+            return Err(crate::Error::InvalidParam($name.to_string()));
+        }
+    };
+}
+
 #[cfg(feature = "events")]
 pub mod events;
 #[cfg(feature = "memes")]

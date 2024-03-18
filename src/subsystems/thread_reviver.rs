@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use log::error;
 use serenity::{
+    all::{CacheHttp, EditThread},
     async_trait,
-    http::Http,
     model::prelude::{ChannelType, Guild, GuildChannel},
     prelude::Context,
 };
@@ -24,17 +24,17 @@ impl Subsystem for ThreadReviver {
     }
 
     async fn thread(&self, ctx: &Context, thread: &GuildChannel) {
-        Self::revive_thread(&ctx.http, thread).await;
+        Self::revive_thread(&ctx.http(), thread).await;
     }
 }
 
 impl ThreadReviver {
-    async fn revive_thread(http: &impl AsRef<Http>, thread: &GuildChannel) {
+    async fn revive_thread(http: impl CacheHttp, thread: &GuildChannel) {
         if let Some(metadata) = thread.thread_metadata {
             if metadata.archived {
                 let result = thread
                     .id
-                    .edit_thread(http, |thread| thread.archived(false))
+                    .edit_thread(http, EditThread::new().archived(false))
                     .await;
                 match result {
                     Ok(_) => (),
@@ -50,43 +50,41 @@ impl ThreadReviver {
     pub async fn guild_init(ctx: Context, g: Guild) {
         let mut channel_errors: HashMap<String, Vec<ChannelError>> = HashMap::new();
         for (channel_id, channel) in g.channels {
-            if let Some(channel) = channel.guild() {
-                if channel.kind == ChannelType::Text {
-                    match channel_id
-                        .get_archived_private_threads(&ctx.http, None, None)
-                        .await
-                    {
-                        Ok(threads_data) => {
-                            for thread in threads_data.threads {
-                                Self::revive_thread(&ctx.http, &thread).await;
-                            }
+            if channel.kind == ChannelType::Text {
+                match channel_id
+                    .get_archived_private_threads(&ctx.http(), None, None)
+                    .await
+                {
+                    Ok(threads_data) => {
+                        for thread in threads_data.threads {
+                            Self::revive_thread(&ctx.http(), &thread).await;
                         }
-                        Err(error) => {
-                            let vector = channel_errors.entry(error.to_string()).or_default();
-                            vector.push(ChannelError {
-                                public: false,
-                                channel: channel.name.clone(),
-                            });
+                    }
+                    Err(error) => {
+                        let vector = channel_errors.entry(error.to_string()).or_default();
+                        vector.push(ChannelError {
+                            public: false,
+                            channel: channel.name.clone(),
+                        });
+                    }
+                };
+                match channel_id
+                    .get_archived_public_threads(&ctx.http(), None, None)
+                    .await
+                {
+                    Ok(threads_data) => {
+                        for thread in threads_data.threads {
+                            Self::revive_thread(&ctx.http(), &thread).await;
                         }
-                    };
-                    match channel_id
-                        .get_archived_public_threads(&ctx.http, None, None)
-                        .await
-                    {
-                        Ok(threads_data) => {
-                            for thread in threads_data.threads {
-                                Self::revive_thread(&ctx.http, &thread).await;
-                            }
-                        }
-                        Err(error) => {
-                            let vector = channel_errors.entry(error.to_string()).or_default();
-                            vector.push(ChannelError {
-                                public: true,
-                                channel: channel.name,
-                            });
-                        }
-                    };
-                }
+                    }
+                    Err(error) => {
+                        let vector = channel_errors.entry(error.to_string()).or_default();
+                        vector.push(ChannelError {
+                            public: true,
+                            channel: channel.name,
+                        });
+                    }
+                };
             }
         }
         // print any errors we encountered in a reasonably nicely formatted way, to help with diagnosing either actual code issues or Discord permission issues.

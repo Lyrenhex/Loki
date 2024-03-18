@@ -1,5 +1,6 @@
 use log::error;
 use serenity::{
+    all::{CacheHttp as _, EditMember},
     async_trait,
     model::prelude::{ActivityType, GuildId, Presence},
     prelude::Context,
@@ -29,18 +30,25 @@ impl Subsystem for StreamIndicator {
         {
             if let Some(user) = new_data.user.to_user() {
                 let mut notify = true;
-                for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
+                for guild in config
+                    .guilds()
+                    .map(|g| GuildId::new(g.parse::<u64>().unwrap()))
+                {
                     let nick = user
-                        .nick_in(&ctx.http, guild)
+                        .nick_in(&ctx.http(), guild)
                         .await
                         .unwrap_or(user.name.clone());
                     if !nick.starts_with(STREAMING_PREFIX) {
                         let old_nick = nick.clone();
                         let nick = STREAMING_PREFIX.to_owned()
                             + &nick.chars().take(30).collect::<String>();
-                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
+                        if let Ok(guild) = guild.to_partial_guild(&ctx.http()).await {
                             if let Err(e) = guild
-                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
+                                .edit_member(
+                                    &ctx.http(),
+                                    user.id,
+                                    EditMember::new().nickname(&nick),
+                                )
                                 .await
                             {
                                 error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
@@ -72,16 +80,23 @@ impl Subsystem for StreamIndicator {
                 }
             }
         } else if let Some(user) = new_data.user.to_user() {
-            for guild in config.guilds().map(|g| GuildId(g.parse::<u64>().unwrap())) {
-                let nick = user.nick_in(&ctx.http, guild).await;
+            for guild in config
+                .guilds()
+                .map(|g| GuildId::new(g.parse::<u64>().unwrap()))
+            {
+                let nick = user.nick_in(&ctx.http(), guild).await;
                 if let Some(nick) = nick {
                     if nick.starts_with(STREAMING_PREFIX) {
                         // the user isn't streaming any more, but they are still marked as such.
                         let old_nick = nick.clone();
                         let nick = nick.chars().skip(2).collect::<String>();
-                        if let Ok(guild) = guild.to_partial_guild(&ctx.http).await {
+                        if let Ok(guild) = guild.to_partial_guild(&ctx.http()).await {
                             if let Err(e) = guild
-                                .edit_member(&ctx.http, user.id, |u| u.nickname(nick.clone()))
+                                .edit_member(
+                                    &ctx.http(),
+                                    user.id,
+                                    EditMember::new().nickname(&nick),
+                                )
                                 .await
                             {
                                 error!("Nickname update failed: {old_nick} -> {nick}\n{:?}", e);
