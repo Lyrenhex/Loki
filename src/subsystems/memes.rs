@@ -5,22 +5,19 @@ use log::{error, info};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serenity::{
-    async_trait, futures,
-    model::{
-        id::UserId,
-        prelude::{
-            interaction::application_command::CommandDataOptionValue, ChannelId, ChannelType,
-            Guild, Message, MessageFlags, MessageId,
-        },
-        Permissions,
+    all::{
+        CacheHttp, ChannelId, ChannelType, CreateEmbed, CreateMessage, GetMessages, Guild, Message,
+        MessageFlags, MessageId,
     },
+    async_trait, futures,
+    model::{id::UserId, Permissions},
     prelude::{Context, Mentionable},
 };
 
 use crate::{
-    command::{create_embed, create_response, Command, PermissionType},
+    command::{create_embed, Command, PermissionType},
     config::get_memes,
-    create_raw_embed, create_response_from_embed,
+    create_raw_embed, ActionResponse, Error,
 };
 use crate::{
     command::{notify_subscribers, OptionType},
@@ -32,6 +29,7 @@ use super::Subsystem;
 
 const REACTION_CHANCE: f64 = 0.1;
 const REACTION_EMOTE: char = '🤖';
+const NO_MEMES_GIF: &str = "https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif";
 
 pub struct MemesVoting;
 
@@ -41,7 +39,7 @@ impl Subsystem for MemesVoting {
         vec![Command::new(
             "memes",
             "Commands for the meme-voting system.",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
             None,
         )
         .add_variant(
@@ -49,22 +47,16 @@ impl Subsystem for MemesVoting {
                 "set_channel",
                 "Sets the memes channel for this server and initialises the meme subsystem.",
                 PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-                Some(Box::new(move |ctx, command| {
+                Some(Box::new(move |ctx, command, params| {
                     Box::pin(async {
-                        let (channel_id, channel) =
-                            if let Some(CommandDataOptionValue::Channel(channel)) =
-                                &command.data.options[0].options[0].resolved
-                            {
-                                if let Some(channel) =
-                                    channel.id.to_channel(&ctx.http).await?.guild()
-                                {
-                                    (channel.id, channel)
-                                } else {
-                                    return Err(crate::Error::InvalidChannel);
-                                }
-                            } else {
-                                return Err(crate::Error::InvalidChannel);
-                            };
+                        let channel_id = *get_param!(params, Channel, "channel");
+                        let channel = if let Some(channel) =
+                            channel_id.to_channel(&ctx.http()).await?.guild()
+                        {
+                            channel
+                        } else {
+                            return Err(Error::InvalidChannel);
+                        };
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild_config = config.guild_mut(&command.guild_id.unwrap());
@@ -75,7 +67,7 @@ impl Subsystem for MemesVoting {
                         let resp = format!("Memes channel set to {}.", channel);
                         channel
                             .send_message(
-                                &ctx.http,
+                                &ctx.http(),
                                 create_embed(format!(
                                     "**Post your best memes!**
 Vote by reacting to your favourite memes.
@@ -84,8 +76,7 @@ The post with the most total reactions by <t:{}:F> wins!",
                                 )),
                             )
                             .await?;
-                        create_response(&ctx.http, command, &resp, true).await;
-                        Ok(())
+                        Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)))
                     })
                 })),
             )
@@ -100,7 +91,7 @@ The post with the most total reactions by <t:{}:F> wins!",
             "unset_channel",
             "Unsets the memes channel for this server, resetting the meme subsystem.",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-            Some(Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command, _params| {
                 Box::pin(async {
                     let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
@@ -114,12 +105,11 @@ The post with the most total reactions by <t:{}:F> wins!",
                     config.save();
                     crate::drop_data_handle!(data);
                     let resp = "Memes channel unset.".to_string();
-                    create_response(&ctx.http, command, &resp, true).await;
                     if let Some(channel) = channel {
-                        if let Some(channel) = channel.to_channel(&ctx.http).await?.guild() {
+                        if let Some(channel) = channel.to_channel(&ctx.http()).await?.guild() {
                             channel
                                 .send_message(
-                                    &ctx.http,
+                                    &ctx.http(),
                                     create_embed(
                                         "**Halt your memes!**
 I won't see them anymore. :("
@@ -129,17 +119,16 @@ I won't see them anymore. :("
                                 .await?;
                         }
                     }
-                    Ok(())
+                    Ok(Some(ActionResponse::new(create_raw_embed(&resp), true)))
                 })
             })),
         ))
         .add_variant(Command::new(
             "leaderboard",
             "Display the leaderboard for meme voting victories.",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
-            Some(Box::new(move |ctx, command| {
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
+            Some(Box::new(move |ctx, command, _params| {
                 Box::pin(async {
-                    let mut resp = create_raw_embed("**Top 10 Memesters**".to_string());
                     let mut users = String::new();
                     let mut counts = String::new();
                     let data = crate::acquire_data_handle!(read ctx);
@@ -154,7 +143,7 @@ I won't see them anymore. :("
                         users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
                             Ok::<String, crate::Error>(
                                 UserId::from(uid.parse::<u64>().unwrap())
-                                    .to_user(&ctx.http)
+                                    .to_user(&ctx.http())
                                     .await?
                                     .mention()
                                     .to_string(),
@@ -168,10 +157,10 @@ I won't see them anymore. :("
                             .collect::<Vec<String>>()
                             .join("\n");
                     }
-                    resp.field("User", users, true)
+                    let resp = create_raw_embed("**Top 10 Memesters**".to_string())
+                        .field("User", users, true)
                         .field("Victories", counts, true);
-                    create_response_from_embed(&ctx.http, command, resp, false).await;
-                    Ok(())
+                    Ok(Some(ActionResponse::new(resp, false)))
                 })
             })),
         ))]
@@ -191,7 +180,7 @@ I won't see them anymore. :("
                 if message.channel_id == memes.channel() && !message.is_own(&ctx.cache) {
                     if !memes.has_reacted()
                         && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                        && message.react(&ctx.http, REACTION_EMOTE).await.is_ok()
+                        && message.react(&ctx.http(), REACTION_EMOTE).await.is_ok()
                     {
                         memes.reacted();
                     }
@@ -215,14 +204,15 @@ impl MemesVoting {
         // TODO: we should really split this into two stages to limit the amount of time we have a writable handle on this - retrieve messages via Discord API using a read handle into a local vector, then grab a write handle and actually do the modifications we need.
         if let Some(memes) = guild.memes_mut() {
             // catch up on any messages that were missed while we were offline.
-            if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
+            if let Ok(channel) = memes.channel().to_channel(&ctx.http()).await {
                 let channel = channel.guild().unwrap();
                 loop {
                     if let Some(last_message) = memes.list().last() {
                         match channel
-                            .messages(&ctx.http, |retriever| {
-                                retriever.after(last_message).limit(100)
-                            })
+                            .messages(
+                                &ctx.http(),
+                                GetMessages::default().after(last_message).limit(100),
+                            )
                             .await
                         {
                             Ok(messages) => {
@@ -280,23 +270,25 @@ impl MemesVoting {
                     if let Some(memes) = get_memes(&data, &g.id) {
                         let channel = memes
                             .channel()
-                            .to_channel(&ctx.http)
+                            .to_channel(&ctx.http())
                             .await
                             .unwrap()
                             .guild()
                             .unwrap();
                         if memes.list().len() - 1 == 0 {
                             channel
-                                .send_message(&ctx.http, |m| {
-                                    m.add_embed(|e| {
-                                        e.description(
-                                            "**No memes?**
+                                .send_message(
+                                    &ctx.http(),
+                                    CreateMessage::new().add_embed(
+                                        CreateEmbed::new()
+                                            .description(
+                                                "**No memes?**
 Two days left! Perhaps time to post some?",
-                                        )
-                                        .image("https://media.tenor.com/ve60xH3hKrcAAAAC/no.gif")
-                                        .colour(crate::COLOUR)
-                                    })
-                                })
+                                            )
+                                            .image(NO_MEMES_GIF)
+                                            .colour(crate::COLOUR),
+                                    ),
+                                )
                                 .await
                                 .ok();
                         }
@@ -326,7 +318,7 @@ Two days left! Perhaps time to post some?",
                 let config = data.get_mut::<Config>().unwrap();
                 let guild = config.guild_mut(&g.id);
                 if let Some(memes) = guild.memes_mut() {
-                    if let Ok(channel) = memes.channel().to_channel(&ctx.http).await {
+                    if let Ok(channel) = memes.channel().to_channel(&ctx.http()).await {
                         let channel = channel.guild().unwrap();
                         let mut most_reactions = 0;
                         let mut victor: Option<Message> = None;
@@ -338,13 +330,13 @@ Two days left! Perhaps time to post some?",
                             meme_list.len()
                         );
                         for meme in meme_list {
-                            if let Ok(meme) = channel.message(&ctx.http, meme).await {
+                            if let Ok(meme) = channel.message(&ctx.http(), meme).await {
                                 if !meme.is_own(&ctx.cache) {
                                     let mut total_reactions: u64 =
                                         meme.reactions.iter().map(|m| m.count).sum();
                                     if !reacted
                                         && rand::thread_rng().gen_bool(REACTION_CHANCE)
-                                        && meme.react(&ctx.http, REACTION_EMOTE).await.is_ok()
+                                        && meme.react(&ctx.http(), REACTION_EMOTE).await.is_ok()
                                     {
                                         reacted = true;
                                         total_reactions += 1;
@@ -361,7 +353,7 @@ Two days left! Perhaps time to post some?",
                             memes.add_victory(victor.author.id);
                             channel
                                 .send_message(
-                                    &ctx.http,
+                                    &ctx.http(),
                                     crate::command::create_embed(format!(
                                         "**Voting results**
 Congratulations {} for winning this week's meme contest, with \
@@ -383,7 +375,7 @@ You've got until <t:{}:F>.",
                         } else {
                             channel
                                 .send_message(
-                                    &ctx.http,
+                                    &ctx.http(),
                                     crate::command::create_embed(format!(
                                         "**No votes**
 There weren't any votes (reactions), so there's no winner. Sadge.

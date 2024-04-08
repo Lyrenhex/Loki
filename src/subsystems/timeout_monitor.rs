@@ -2,23 +2,22 @@ use chrono::{DateTime, Utc};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serenity::{
+    all::{CacheHttp as _, Mentionable as _},
     async_trait, futures,
     model::{
+        application::CommandDataOptionValue,
         id::UserId,
-        prelude::{
-            interaction::application_command::CommandDataOptionValue, Channel, ChannelId,
-            ChannelType, Member,
-        },
+        prelude::{Channel, ChannelId, ChannelType, Member},
         Permissions, Timestamp,
     },
-    prelude::{Context, Mentionable},
+    prelude::Context,
 };
 use tinyvec::array_vec;
 
 use crate::{
-    command::{create_response, Command, OptionType, PermissionType},
+    command::{Command, OptionType, PermissionType},
     config::{get_guild, Config},
-    create_embed, create_raw_embed, create_response_from_embed,
+    create_embed, create_raw_embed, ActionResponse,
 };
 
 use super::Subsystem;
@@ -93,33 +92,26 @@ impl Subsystem for TimeoutMonitor {
         vec![Command::new(
             "timeouts",
             "Timeout statistics for a given user.",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
             None,
         )
         .add_variant(Command::new(
             "check",
             "Check timeout statistics for a given user.",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
-            Some(Box::new(move |ctx, command| {
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
+            Some(Box::new(move |ctx, command, params| {
                 Box::pin(async {
-                    let user = if let Some(CommandDataOptionValue::User(user, _)) =
-                        &command.data.options[0].options[0].resolved
-                    {
-                        user
-                    } else {
-                        return Err(crate::Error::InvalidUser);
-                    };
+                    let user = get_param!(params, User, "user");
                     let data = crate::acquire_data_handle!(read ctx);
                     let mut resp = format!("{} hasn't been timed out!", user.mention());
                     if let Some(guild) = get_guild(&data, &command.guild_id.unwrap()) {
                         if let Some(timeouts) = guild.timeouts() {
-                            if let Some(utd) = timeouts.get(&user.id.to_string()) {
+                            if let Some(utd) = timeouts.get(&user.to_string()) {
                                 resp = format!("{} has been timed out **{}** time(s), for a total of **{} second(s)**.", user.mention(), utd.count, utd.total_time);
                             }
                         }
                     }
-                    create_response(&ctx.http, command, &resp, false).await;
-                    Ok(())
+                    Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                 })
             })),
         )
@@ -133,15 +125,15 @@ impl Subsystem for TimeoutMonitor {
             "configure_announcements",
             "Configure announcements when a user is timed out.",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-            Some(Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command, params| {
                 Box::pin(async {
                     // Set announcement channel if it's been supplied.
-                    if let Some(channel_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "channel") {
+                    if let Some(channel_opt) = params.iter().find(|opt| opt.name == "channel") {
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
-                        if let Some(CommandDataOptionValue::Channel(channel)) = &channel_opt.resolved {
-                            let channel = channel.id.to_channel(&ctx.http).await?;
+                        if let CommandDataOptionValue::Channel(channel) = &channel_opt.value {
+                            let channel = channel.to_channel(&ctx.http()).await?;
                             if let Some(announcement_config) = guild.timeouts_announcement_config_mut() {
                                 announcement_config.set_channel(channel);
                             } else {
@@ -156,25 +148,23 @@ impl Subsystem for TimeoutMonitor {
                         let guild = get_guild(&data, &command.guild_id.unwrap());
                         // We don't know this guild.
                         if guild.is_none() {
-                            create_response(&ctx.http, command, &"You must set an announcements channel first!".into(), true).await;
-                            return Ok(());
+                            return Ok(Some(ActionResponse::new(create_raw_embed("You must set an announcements channel first!"), true)));
                         }
                         let announcements_config = guild.unwrap().timeouts_announcement_config();
                         // No announcements channel set!
                         if announcements_config.is_none() {
-                            create_response(&ctx.http, command, &"You must set an announcements channel first!".into(), true).await;
-                            return Ok(());
+                            return Ok(Some(ActionResponse::new(create_raw_embed("You must set an announcements channel first!"), true)));
                         }
                         // There is an announcements channel set, so we can continue with that.
                     };
 
                     // Set announcement prefix if it's been supplied.
-                    if let Some(prefix_opt) = command.data.options[0].options.iter().find(|opt| opt.name == "announcement_prefix") {
+                    if let Some(prefix_opt) = params.iter().find(|opt| opt.name == "announcement_prefix") {
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         let announcement_config = guild.timeouts_announcement_config_mut().unwrap();
-                        if let Some(CommandDataOptionValue::String(prefix)) = &prefix_opt.resolved {
+                        if let CommandDataOptionValue::String(prefix) = &prefix_opt.value {
                             announcement_config.set_prefix(prefix);
                             config.save();
                         }
@@ -186,10 +176,9 @@ impl Subsystem for TimeoutMonitor {
                     let resp = format!("**Timeouts announcement config updated!**
 Channel: {}
 Announcement text: {}",
-                        announcements_config.channel().to_channel(&ctx.http).await?,
+                        announcements_config.channel().to_channel(&ctx.http()).await?,
                         announcements_config.announcement_text());
-                    create_response(&ctx.http, command, &resp, true).await;
-                    Ok(())
+                    Ok(Some(ActionResponse::new(create_raw_embed(resp), true)))
                 })
             })),
         )
@@ -209,7 +198,7 @@ Announcement text: {}",
             "stop_announcements",
             "Stop all announcements. Unsets all configuration values.",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
-            Some(Box::new(move |ctx, command| {
+            Some(Box::new(move |ctx, command, _params| {
                 Box::pin(async {
                     let mut data = crate::acquire_data_handle!(write ctx);
                     let config = data.get_mut::<Config>().unwrap();
@@ -217,38 +206,29 @@ Announcement text: {}",
                     let announcements_config = guild.timeouts_announcement_config_mut();
                     // No announcements channel set!
                     if announcements_config.is_none() {
-                        create_response(&ctx.http, command, &"Announcements haven't been set up yet.".into(), true).await;
-                        return Ok(());
+                        return Ok(Some(ActionResponse::new(create_raw_embed("Announcements haven't been set up yet."), true)));
                     }
                     // There is an announcements channel set.
                     guild.timeouts_announcement_uninit();
                     config.save();
                     crate::drop_data_handle!(data);
 
-                    create_response(&ctx.http, command, &"Announcements have been uninitialised.".into(), true).await;
-                    Ok(())
+                    Ok(Some(ActionResponse::new(create_raw_embed("Announcements have been uninitialised."), true)))
                 })
             })),
         ))
         .add_variant(Command::new(
             "leaderboard",
             "Display the leaderboard for timeout statistics.",
-            PermissionType::ServerPerms(Permissions::USE_SLASH_COMMANDS),
-            Some(Box::new(move |ctx, command| {
+            PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
+            Some(Box::new(move |ctx, command, params| {
                 Box::pin(async {
-                    let sort_by = if let Some(CommandDataOptionValue::String(option)) =
-                        &command.data.options[0].options[0].resolved
-                    {
-                        option.to_lowercase()
-                    } else {
-                        return Err(crate::Error::InvalidParam("Option `sort_by` missing on Timeout Ranking invocation.".to_string()));
-                    };
-                    let mut resp = create_raw_embed(format!("**Top 10 Timeout leaderboard** (sorted by {sort_by})"));
+                    let metric = get_param!(params, String, "metric").to_lowercase();
                     let mut users = String::new();
                     let mut counts = String::new();
                     let mut times = String::new();
-                    let sort_by= |(_, utd_a): &(String, UserTimeoutData), (_uid_b, utd_b): &(String, UserTimeoutData)| {
-                        match sort_by.as_str() {
+                    let sort_by = |(_, utd_a): &(String, UserTimeoutData), (_uid_b, utd_b): &(String, UserTimeoutData)| {
+                        match metric.as_str() {
                             "quantity" => utd_b.count.cmp(&utd_a.count),
                             "total time" => utd_b.total_time.cmp(&utd_a.total_time),
                             _ => unreachable!() }
@@ -260,7 +240,7 @@ Announcement text: {}",
                             entries.sort_unstable_by(sort_by);
                             let iter = entries.iter().take(10);
                             users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
-                                Ok::<String, crate::Error>(UserId::from(uid.parse::<u64>().unwrap()).to_user(&ctx.http).await?.mention().to_string())
+                                Ok::<String, crate::Error>(UserId::from(uid.parse::<u64>().unwrap()).to_user(&ctx.http()).await?.mention().to_string())
                             })).await?.join("\n");
                             counts = iter.clone().map(|(_, utd)| { utd.count.to_string() }).collect::<Vec<String>>().join("\n");
                             times = iter.map(|(_, utd)| {
@@ -271,9 +251,8 @@ Announcement text: {}",
                             }).collect::<Vec<String>>().join("\n");
                         }
                     }
-                    resp.field("User", users, true).field("Count", counts, true).field("Total time", times, true);
-                    create_response_from_embed(&ctx.http, command, resp, false).await;
-                    Ok(())
+                    let resp = create_raw_embed(format!("**Top 10 Timeout leaderboard** (sorted by {metric})")).field("User", users, true).field("Count", counts, true).field("Total time", times, true);
+                    Ok(Some(ActionResponse::new(resp, false)))
                 })
             })),
         )
@@ -344,14 +323,14 @@ Announcement text: {}",
                     if let Some(announcements_config) = guild.timeouts_announcement_config() {
                         if let Some(channel) = announcements_config
                             .channel
-                            .to_channel(&ctx.http)
+                            .to_channel(&ctx.http())
                             .await
                             .unwrap()
                             .guild()
                         {
                             channel
                                 .send_message(
-                                    &ctx.http,
+                                    &ctx.http(),
                                     create_embed(format!(
                                         "{}{}{} has been timed out {} times now!",
                                         announcements_config.prefix(),

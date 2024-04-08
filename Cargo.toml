@@ -54,7 +54,7 @@ openssl = { version = "^0.10.32", features = ["vendored"] }
 const_format = { version = "0.2.32", optional = true }
 
 [dependencies.serenity]
-version = "^0.11"
+version = "^0.12"
 default-features = false
 features = [
     "builder",

@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use log::error;
 use serenity::{
+    all::{CreateInteractionResponseMessage, EditInteractionResponse},
     builder::{CreateEmbed, CreateMessage},
     http::Http,
-    model::prelude::interaction::{
-        application_command::ApplicationCommandInteraction, InteractionResponseType,
-    },
+    model::application::CommandInteraction,
     prelude::HttpError,
     Error,
 };
@@ -22,40 +21,37 @@ use tokio::sync::RwLockReadGuard;
 
 /// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
 /// from the provided input string.
-pub fn create_embed(
-    s: String,
-) -> impl for<'a, 'b> FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a> {
-    move |m: &mut CreateMessage| m.add_embed(|e| e.description(s).colour(COLOUR))
+pub fn create_embed(s: String) -> CreateMessage {
+    CreateMessage::new().add_embed(CreateEmbed::default().description(s).colour(COLOUR))
 }
 
 /// Construct a closure for use in [serenity::model::channel::GuildChannel]::send_message
 /// from the provided input string.
-pub fn create_raw_embed(s: impl ToString) -> CreateEmbed {
-    let mut embed = CreateEmbed::default();
-    embed.description(s).colour(COLOUR);
-    embed
+pub fn create_raw_embed(s: impl Into<String>) -> CreateEmbed {
+    CreateEmbed::default().description(s).colour(COLOUR)
 }
 
 /// Create an embed response.
 pub async fn create_response_from_embed(
     http: &Arc<Http>,
-    interaction: &mut ApplicationCommandInteraction,
+    interaction: &mut CommandInteraction,
     embed: CreateEmbed,
     ephemeral: bool,
 ) {
     match interaction
-        .create_interaction_response(&http, |response| {
-            response
-                .kind(InteractionResponseType::ChannelMessageWithSource)
-                .interaction_response_data(|message| {
-                    message.add_embed(embed.clone()).ephemeral(ephemeral)
-                })
-        })
+        .create_response(
+            &http,
+            serenity::all::CreateInteractionResponse::Message(
+                CreateInteractionResponseMessage::new()
+                    .add_embed(embed.clone())
+                    .ephemeral(ephemeral),
+            ),
+        )
         .await
     {
         Ok(()) => {}
         Err(e) => match e {
-            Error::Http(ref e) => match &**e {
+            Error::Http(ref e) => match &e {
                 HttpError::UnsuccessfulRequest(req) => match req.error.code {
                     40060 => {
                         edit_embed_response(http, interaction, embed).await.unwrap();
@@ -72,7 +68,7 @@ pub async fn create_response_from_embed(
 /// Create a text-based embed response with the given `message`.
 pub async fn create_response(
     http: &Arc<Http>,
-    interaction: &mut ApplicationCommandInteraction,
+    interaction: &mut CommandInteraction,
     message: &String,
     ephemeral: bool,
 ) {
@@ -84,31 +80,34 @@ pub async fn create_response(
 /// the new `embed`.
 pub async fn edit_embed_response(
     http: &Arc<Http>,
-    interaction: &mut ApplicationCommandInteraction,
+    interaction: &mut CommandInteraction,
     embed: CreateEmbed,
 ) -> Result<serenity::model::prelude::Message, serenity::Error> {
     interaction
-        .edit_original_interaction_response(&http, |message| {
-            message
+        .edit_response(
+            &http,
+            EditInteractionResponse::new()
                 .content(" ")
                 .add_embed(embed)
-                .components(|components| components.set_action_rows(vec![]))
-        })
+                .components(Vec::new()),
+        )
         .await
 }
 
 /// Notify the subscribers to an event that it has fired.
 #[cfg(feature = "events")]
 pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
+    use serenity::all::CacheHttp as _;
+
     let data = crate::acquire_data_handle!(read ctx);
     let config = data.get::<Config>().unwrap();
     if let Some(subscribers) = config.subscribers(event) {
         for subscriber in subscribers {
-            match subscriber.to_user(&ctx.http).await {
+            match subscriber.to_user(&ctx.http()).await {
                 Ok(u) => {
                     if let Err(e) = u
                         .direct_message(
-                            &ctx.http,
+                            &ctx.http(),
                             create_embed(format!(
                                 "{message}
 
@@ -136,14 +135,16 @@ pub async fn notify_subscribers_with_handle(
     event: Event,
     message: &str,
 ) {
+    use serenity::all::CacheHttp as _;
+
     let config = data.get::<Config>().unwrap();
     if let Some(subscribers) = config.subscribers(event) {
         for subscriber in subscribers {
-            match subscriber.to_user(&ctx.http).await {
+            match subscriber.to_user(&ctx.http()).await {
                 Ok(u) => {
                     if let Err(e) = u
                         .direct_message(
-                            &ctx.http,
+                            &ctx.http(),
                             create_embed(format!(
                                 "{message}
 
