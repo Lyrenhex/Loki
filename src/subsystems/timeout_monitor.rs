@@ -360,7 +360,7 @@ Announcement text: {}",
                                         } else {
                                             ""
                                         },
-                                        new.user.name,
+                                        new.user.mention(),
                                         count,
                                     )),
                                 )
