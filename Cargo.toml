@@ -1,6 +1,6 @@
 [package]
 name = "loki-discord-bot"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2021"
 description = "A bot to serve various meme-related purposes within a personal Discord server."
 readme = "README.md"
