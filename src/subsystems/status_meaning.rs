@@ -124,7 +124,7 @@ Assuming there _is_, in fact, a status message, you likely need to \
 prod {manager} to update this."
                             ),
                         };
-                        Ok(Some(ActionResponse::new(create_raw_embed(&resp), false)))
+                        Ok(Some(ActionResponse::new(create_raw_embed(resp), false)))
                     })
                 })),
             ),
