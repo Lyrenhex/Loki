@@ -340,10 +340,11 @@ impl NicknameLottery {
         let between = rand::distributions::Uniform::from(REFRESH_INTERVAL.0..REFRESH_INTERVAL.1);
         loop {
             let now = chrono::Utc::now();
+            let is_april_fools = now.month() == 4 && now.day() == 1;
             if cfg!(not(debug_assertions)) {
                 let mut tts = Duration::from_secs(between.sample(&mut rand::thread_rng()));
                 // It's April Fool's! Force the minimum refresh interval.
-                if now.month() == 4 && now.day() == 1 {
+                if is_april_fools {
                     tts = Duration::from_secs(1_800);
                 } else if now.month() < 4 {
                     let ctts = chrono::Duration::from_std(tts);
@@ -426,10 +427,15 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                     .to_string()
                                     + &new_nick;
                             }
+                            if old_nick == new_nick {
+                                info!("[Guild: {}] Skipping nickname change for {} ({}) as they pulled the same as current: {}.", &g.id, &user.id, &old_nick, &new_nick);
+                                continue;
+                            }
                             info!(
                                 "[Guild: {}] Updating {}'s nickname to {} (current: {})",
                                 &g.id, &user.id, &new_nick, &old_nick
                             );
+                            let mut post_name_change = is_april_fools;
                             if let Err(e) = g
                                 .edit_member(
                                     &ctx.http(),
@@ -438,6 +444,14 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                 )
                                 .await
                             {
+                                post_name_change = true;
+                                warn!(
+                                    "[Guild: {}] Error changing {}'s nickname:
+{e}",
+                                    g.id, user.id
+                                );
+                            }
+                            if post_name_change {
                                 if let Some(channel_id) = lottery_data.complaints_channel() {
                                     let channel = match channel_id.to_channel(&ctx.http()).await {
                                         Ok(channel) => channel.guild(),
@@ -473,16 +487,12 @@ _Nickname changes are disabled for this guild until next initialisation._",
                                         continue;
                                     }
                                 }
-                                warn!(
-                                    "[Guild: {}] Error changing {}'s nickname:
-{e}",
-                                    g.id, user.id
-                                );
                             }
                         }
                     }
                 }
             }
+            // Only run once in debug mode.
             if cfg!(debug_assertions) {
                 break;
             }
