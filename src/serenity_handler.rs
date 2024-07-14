@@ -231,6 +231,9 @@ pub fn construct_option(opt: &crate::command::Option) -> CreateCommandOption {
         }
         OptionType::IntegerInput(min, max) => {
             // Note: The `try_into.unwrap` portion is included to work around a bug introduced by Serenity 0.12; once that bug is fixed (which will in turn make these lines break!), remove these.
+            // Issue: https://github.com/serenity-rs/serenity/issues/2652
+            // Fixed in PR: https://github.com/serenity-rs/serenity/pull/2668
+            // TODO: When this lands in a release version, adjust these back.
             if let Some(min) = min {
                 option = option
                     .clone()
