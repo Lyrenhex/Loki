@@ -411,7 +411,7 @@ Consider checking their nickname list for valid number to remove.",
                             Ok(Some(ActionResponse::new(
                                 create_raw_embed(
                                     format!("**Removed nickname '{}' for {}**
-Originally added by {} (<t:{}:F>)
+Originally added by {} ({})
 **Context:**
 {}",
                                     nickname.nickname(), user.mention(),
@@ -419,7 +419,7 @@ Originally added by {} (<t:{}:F>)
                                             .map(|uid| uid.mention().to_string())
                                             .unwrap_or("`user not known`".to_string()),
                                     nickname.time()
-                                            .map(|time| time.timestamp().to_string())
+                                            .map(|time| format!("<t:{}:F>", time.timestamp().to_string()))
                                             .unwrap_or("`time not known`".to_string()),
                                     nickname.context()
                                             .unwrap_or(&"No context provided.".to_string()),
@@ -616,7 +616,7 @@ Consider checking their nickname list for valid number to remove.",
                             Ok(Some(ActionResponse::new(
                                 create_raw_embed(
                                     format!("**Nickname '{}' for {}**
-Originally added by {} (<t:{}:F>)
+Originally added by {} ({})
 **Context:**
 {}",
                                     nickname.nickname(), user.mention(),
@@ -624,7 +624,7 @@ Originally added by {} (<t:{}:F>)
                                             .map(|uid| uid.mention().to_string())
                                             .unwrap_or("`user not known`".to_string()),
                                     nickname.time()
-                                            .map(|time| time.timestamp().to_string())
+                                            .map(|time| format!("<t:{}:F>", time.timestamp().to_string()))
                                             .unwrap_or("`time not known`".to_string()),
                                     nickname.context()
                                             .unwrap_or(&"No context provided.".to_string()),
