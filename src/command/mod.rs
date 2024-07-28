@@ -90,19 +90,21 @@ impl<'a> Command<'a> {
     /// ## Example
     ///
     /// ```
-    /// Command::new(
+    /// use loki_discord_bot::{PermissionType, Command};
+    ///
+    /// let _command = Command::new(
     ///     "name",
     ///     "A description of what the command does.",
     ///     PermissionType::Universal,
     ///     Some(
-    ///         Box::new(move |ctx, command| {
+    ///         Box::new(move |ctx, command, params| {
     ///             Box::pin(async {
     ///                 // do something here
-    ///                 Ok(())
+    ///                 Ok(None) // no response needed
     ///             })
     ///         })
     ///     ),
-    /// ),
+    /// );
     /// ```
     pub fn new(
         name: &'a str,

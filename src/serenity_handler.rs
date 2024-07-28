@@ -100,15 +100,37 @@ impl EventHandler for SerenityHandler<'_> {
                     let mut cmd = cmd;
                     let mut options = command.data.options.clone();
                     if !command.data.options.is_empty()
-                        && command.data.options[0].kind() == CommandOptionType::SubCommand
+                        && matches!(
+                            command.data.options[0].kind(),
+                            CommandOptionType::SubCommand | CommandOptionType::SubCommandGroup
+                        )
                     {
+                        // TODO: This is a little... unpleasant.
+                        // At some point it'd be good to refactor this to be recursive, like how we generate these group structures in the first place.
                         for subcmd in cmd.variants() {
                             if subcmd.name() == command.data.options[0].name {
                                 cmd = subcmd;
-                                if let CommandDataOptionValue::SubCommand(os) =
+                                if let CommandDataOptionValue::SubCommandGroup(os) =
                                     &command.data.options[0].value
                                 {
-                                    options = os.clone();
+                                    options.clone_from(os);
+                                    for subcmd in cmd.variants() {
+                                        if subcmd.name() == os[0].name {
+                                            cmd = subcmd;
+                                            if let CommandDataOptionValue::SubCommand(os) =
+                                                &os[0].value
+                                            {
+                                                options.clone_from(os);
+                                            } else {
+                                                error!("Failed to extract subcommand options from {command:?}");
+                                            }
+                                            break;
+                                        }
+                                    }
+                                } else if let CommandDataOptionValue::SubCommand(os) =
+                                    &command.data.options[0].value
+                                {
+                                    options.clone_from(os);
                                 } else {
                                     error!("Failed to extract subcommand options from {command:?}");
                                 }
@@ -204,7 +226,7 @@ pub fn construct_command(cmd: &crate::command::Command) -> CreateCommand {
         command = command.default_member_permissions(permissions);
     }
     for variant in cmd.variants() {
-        command = command.add_option(crate::SerenityHandler::create_variant(variant))
+        command = command.add_option(crate::SerenityHandler::create_variant(variant, true))
     }
     for opt in cmd.options() {
         command = command.add_option(construct_option(opt))
@@ -283,20 +305,42 @@ impl<'a> SerenityHandler<'a> {
         Self { commands }
     }
 
-    pub(crate) fn create_variant(variant: &crate::Command) -> CreateCommandOption {
-        let mut subcmd = CreateCommandOption::new(
-            CommandOptionType::SubCommand,
-            variant.name(),
-            variant.description(),
-        )
-        .required(false);
-        assert!(
-            variant.variants().is_empty(),
-            "Discord does not currently support nesting CommandGroups."
-        );
-        // for variant in variant.variants() {
-        //     subcmd = subcmd.create_sub_option(|subcmd| Self::create_variant(subcmd, variant));
-        // }
+    pub(crate) fn create_variant(
+        variant: &crate::Command,
+        allow_subcommands: bool,
+    ) -> CreateCommandOption {
+        let mut subcmd = if allow_subcommands {
+            if variant.variants().is_empty() {
+                CreateCommandOption::new(
+                    CommandOptionType::SubCommand,
+                    variant.name(),
+                    variant.description(),
+                )
+                .required(false)
+            } else {
+                let mut subcmd = CreateCommandOption::new(
+                    CommandOptionType::SubCommandGroup,
+                    variant.name(),
+                    variant.description(),
+                )
+                .required(false);
+                for variant in variant.variants() {
+                    subcmd = subcmd.add_sub_option(Self::create_variant(variant, false));
+                }
+                subcmd
+            }
+        } else {
+            assert!(
+                variant.variants().is_empty(),
+                "Discord currently allows a top-level command to contain subcommand groups, which each contain direct subcommands. No further nesting is supported."
+            );
+            CreateCommandOption::new(
+                CommandOptionType::SubCommand,
+                variant.name(),
+                variant.description(),
+            )
+            .required(false)
+        };
         for opt in variant.options() {
             subcmd = subcmd.add_sub_option(construct_option(opt))
         }
