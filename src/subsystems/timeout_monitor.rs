@@ -246,7 +246,7 @@ Announcement text: {}",
                             times = iter.map(|(_, utd)| {
                                 let seconds = utd.total_time % 60;
                                 let minutes = (utd.total_time / 60) % 60;
-                                let hours = (utd.total_time / 60 / 60) % 60;
+                                let hours = utd.total_time / 60 / 60;
                                 format!("{hours}h {minutes}m {seconds}s")
                             }).collect::<Vec<String>>().join("\n");
                         }
