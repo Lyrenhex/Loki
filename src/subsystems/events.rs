@@ -149,7 +149,7 @@ impl Subsystem for Events {
                 "**Hey!**
 I'm starting up with version [{}]({}/releases/tag/v{}). 😁",
                 crate::VERSION,
-                crate::GITHUB_URL,
+                crate::REPO_URL,
                 crate::VERSION,
             )
             .as_str(),

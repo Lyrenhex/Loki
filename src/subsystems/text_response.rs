@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use serenity::all::{ActionRowComponent, CacheHttp as _, CreateActionRow, CreateModal};
+use serenity::all::{ActionRowComponent, CreateActionRow, CreateModal};
 use serenity::async_trait;
 use serenity::model::prelude::Message;
 use serenity::model::Permissions;
@@ -76,7 +76,7 @@ Perhaps try adding some?"), true)))
                         let components = vec![CreateActionRow::InputText(new_response)];
 
                         command
-                            .create_response(&ctx.http(), serenity::all::CreateInteractionResponse::Modal(CreateModal::new("set_response_value", "Set text response value").components(components)))
+                            .create_response(&ctx, serenity::all::CreateInteractionResponse::Modal(CreateModal::new("set_response_value", "Set text response value").components(components)))
                             .await?;
 
                         let guild_id = command.guild_id.unwrap();
@@ -115,7 +115,7 @@ Perhaps try adding some?"), true)))
                             crate::drop_data_handle!(data);
 
                             // it's now safe to close the modal, so send a response to it
-                            int.create_response(&ctx.http(), serenity::all::CreateInteractionResponse::Acknowledge)
+                            int.create_response(&ctx, serenity::all::CreateInteractionResponse::Acknowledge)
                             .await?;
                         }
 
@@ -138,13 +138,10 @@ Perhaps try adding some?"), true)))
                 if let Some(response_map) = guild.response_map() {
                     for (activator, response) in response_map {
                         if message.content.to_lowercase().contains(activator) {
-                            if let Ok(channel) = message.channel(&ctx.http()).await {
+                            if let Ok(channel) = message.channel(&ctx).await {
                                 if let Some(channel) = channel.guild() {
                                     if let Err(e) = channel
-                                        .send_message(
-                                            &ctx.http(),
-                                            create_embed(response.to_string()),
-                                        )
+                                        .send_message(&ctx, create_embed(response.to_string()))
                                         .await
                                     {
                                         notify_subscribers(

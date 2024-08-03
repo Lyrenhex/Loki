@@ -1,3 +1,4 @@
+use serenity::all::MessageId;
 use std::collections::hash_map::Keys;
 use std::collections::HashMap;
 use std::{env, fs};
@@ -216,9 +217,9 @@ impl Guild {
 
 #[cfg(feature = "memes")]
 impl Guild {
-    pub fn set_memes_channel(&mut self, channel: Option<ChannelId>) {
-        if let Some(channel) = channel {
-            self.memes = Some(Memes::new(channel));
+    pub fn set_memes_channel(&mut self, settings: Option<(ChannelId, MessageId)>) {
+        if let Some((channel, message)) = settings {
+            self.memes = Some(Memes::new(channel, message));
         } else {
             self.memes = None;
         }

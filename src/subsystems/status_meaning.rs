@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use serenity::all::{
-    ActionRowComponent, CacheHttp as _, CreateActionRow, CreateModal, Mentionable as _,
-};
+use serenity::all::{ActionRowComponent, CreateActionRow, CreateModal, Mentionable as _};
 
 use crate::config::Config;
 
@@ -24,7 +22,7 @@ impl Subsystem for StatusMeaning {
                     Box::pin(async move {
                         let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
-                        let manager = config.get_manager().to_user(&ctx.http()).await?;
+                        let manager = config.get_manager().to_user(&ctx).await?;
                         if command.user != manager {
                             let resp =
                                 format!("**Unauthorised:** You're not {}!", manager.mention());
@@ -47,7 +45,7 @@ impl Subsystem for StatusMeaning {
 
                         command
                             .create_response(
-                                &ctx.http(),
+                                &ctx,
                                 serenity::all::CreateInteractionResponse::Modal(
                                     CreateModal::new(
                                         "set_status_meaning",
@@ -90,7 +88,7 @@ impl Subsystem for StatusMeaning {
 
                             // it's now safe to close the modal, so send a response to it
                             int.create_response(
-                                &ctx.http(),
+                                &ctx,
                                 serenity::all::CreateInteractionResponse::Acknowledge,
                             )
                             .await?;
@@ -105,10 +103,10 @@ impl Subsystem for StatusMeaning {
                 "Retrieves the meaning of the bot managers's current Discord status.",
                 command::PermissionType::Universal,
                 Some(Box::new(move |ctx, _command, _params| {
-                    Box::pin(async {
+                    Box::pin(async move {
                         let data = crate::acquire_data_handle!(read ctx);
                         let config = data.get::<Config>().unwrap();
-                        let manager = config.get_manager().to_user(&ctx.http()).await?.mention();
+                        let manager = config.get_manager().to_user(&ctx).await?.mention();
                         let resp = match config.get_status_meaning() {
                             Some(meaning) => format!(
                                 "**Status meaning:**

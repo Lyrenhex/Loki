@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serenity::{
-    all::{CacheHttp as _, Mentionable as _},
+    all::Mentionable as _,
     async_trait, futures,
     model::{
         application::CommandDataOptionValue,
@@ -126,14 +126,14 @@ impl Subsystem for TimeoutMonitor {
             "Configure announcements when a user is timed out.",
             PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
             Some(Box::new(move |ctx, command, params| {
-                Box::pin(async {
+                Box::pin(async move {
                     // Set announcement channel if it's been supplied.
                     if let Some(channel_opt) = params.iter().find(|opt| opt.name == "channel") {
                         let mut data = crate::acquire_data_handle!(write ctx);
                         let config = data.get_mut::<Config>().unwrap();
                         let guild = config.guild_mut(&command.guild_id.unwrap());
                         if let CommandDataOptionValue::Channel(channel) = &channel_opt.value {
-                            let channel = channel.to_channel(&ctx.http()).await?;
+                            let channel = channel.to_channel(&ctx).await?;
                             if let Some(announcement_config) = guild.timeouts_announcement_config_mut() {
                                 announcement_config.set_channel(channel);
                             } else {
@@ -176,7 +176,7 @@ impl Subsystem for TimeoutMonitor {
                     let resp = format!("**Timeouts announcement config updated!**
 Channel: {}
 Announcement text: {}",
-                        announcements_config.channel().to_channel(&ctx.http()).await?,
+                        announcements_config.channel().to_channel(&ctx).await?,
                         announcements_config.announcement_text());
                     Ok(Some(ActionResponse::new(create_raw_embed(resp), true)))
                 })
@@ -222,7 +222,7 @@ Announcement text: {}",
             "Display the leaderboard for timeout statistics.",
             PermissionType::ServerPerms(Permissions::USE_APPLICATION_COMMANDS),
             Some(Box::new(move |ctx, command, params| {
-                Box::pin(async {
+                Box::pin(async move {
                     let metric = get_param!(params, String, "metric").to_lowercase();
                     let mut users = String::new();
                     let mut counts = String::new();
@@ -240,7 +240,7 @@ Announcement text: {}",
                             entries.sort_unstable_by(sort_by);
                             let iter = entries.iter().take(10);
                             users = futures::future::try_join_all(iter.clone().map(|(uid, _)| async {
-                                Ok::<String, crate::Error>(UserId::from(uid.parse::<u64>().unwrap()).to_user(&ctx.http()).await?.mention().to_string())
+                                Ok::<String, crate::Error>(UserId::from(uid.parse::<u64>().unwrap()).to_user(&ctx).await?.mention().to_string())
                             })).await?.join("\n");
                             counts = iter.clone().map(|(_, utd)| { utd.count.to_string() }).collect::<Vec<String>>().join("\n");
                             times = iter.map(|(_, utd)| {
@@ -323,14 +323,14 @@ Announcement text: {}",
                     if let Some(announcements_config) = guild.timeouts_announcement_config() {
                         if let Some(channel) = announcements_config
                             .channel
-                            .to_channel(&ctx.http())
+                            .to_channel(&ctx)
                             .await
                             .unwrap()
                             .guild()
                         {
                             channel
                                 .send_message(
-                                    &ctx.http(),
+                                    &ctx,
                                     create_embed(format!(
                                         "{}{}{} has been timed out {} times now!",
                                         announcements_config.prefix(),
