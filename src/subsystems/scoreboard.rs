@@ -4,7 +4,7 @@ use const_format::formatcp;
 use log::{error, info, trace};
 use serde::{Deserialize, Serialize};
 use serenity::{
-    all::{CacheHttp as _, Mentionable as _},
+    all::Mentionable as _,
     async_trait, futures,
     model::{
         gateway::Ready,
@@ -84,7 +84,7 @@ impl ScoreboardData {
         if self.scoreboards.is_empty() {
             if let Some(cid) = self.ephemeral_command_id {
                 self.ephemeral_command_id = None;
-                g.delete_command(&ctx.http(), cid).await?;
+                g.delete_command(&ctx, cid).await?;
                 info!(
                     "[Guild: {}] Deleted ephemeral `scoreboard` command (id {cid})",
                     g
@@ -174,12 +174,9 @@ impl ScoreboardData {
             )),
         );
         self.ephemeral_command_id = Some(
-            g.create_command(
-                &ctx.http(),
-                crate::serenity_handler::construct_command(&command),
-            )
-            .await?
-            .id,
+            g.create_command(&ctx, crate::serenity_handler::construct_command(&command))
+                .await?
+                .id,
         );
         info!(
             "[Guild: {}] Created ephemeral `scoreboard` command (id {}) with {} variants",
@@ -310,7 +307,7 @@ impl Subsystem for Scoreboards {
                 .add_variant(Command::new_stub(
                     "view",
                     Some(Box::new(move |ctx, command, params| {
-                        Box::pin(async {
+                        Box::pin(async move {
                             let name = get_param!(params, String, "name");
                             let mut positions = String::new();
                             let mut users = String::new();
@@ -340,10 +337,7 @@ impl Subsystem for Scoreboards {
                                     users = futures::future::try_join_all(entries.iter().map(
                                         |(_, uid, _)| async {
                                             Ok::<String, crate::Error>(
-                                                uid.to_user(&ctx.http())
-                                                    .await?
-                                                    .mention()
-                                                    .to_string(),
+                                                uid.to_user(&ctx).await?.mention().to_string(),
                                             )
                                         },
                                     ))

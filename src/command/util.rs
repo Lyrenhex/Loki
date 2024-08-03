@@ -97,17 +97,15 @@ pub async fn edit_embed_response(
 /// Notify the subscribers to an event that it has fired.
 #[cfg(feature = "events")]
 pub async fn notify_subscribers(ctx: &Context, event: Event, message: &str) {
-    use serenity::all::CacheHttp as _;
-
     let data = crate::acquire_data_handle!(read ctx);
     let config = data.get::<Config>().unwrap();
     if let Some(subscribers) = config.subscribers(event) {
         for subscriber in subscribers {
-            match subscriber.to_user(&ctx.http()).await {
+            match subscriber.to_user(&ctx).await {
                 Ok(u) => {
                     if let Err(e) = u
                         .direct_message(
-                            &ctx.http(),
+                            &ctx,
                             create_embed(format!(
                                 "{message}
 
@@ -135,16 +133,14 @@ pub async fn notify_subscribers_with_handle(
     event: Event,
     message: &str,
 ) {
-    use serenity::all::CacheHttp as _;
-
     let config = data.get::<Config>().unwrap();
     if let Some(subscribers) = config.subscribers(event) {
         for subscriber in subscribers {
-            match subscriber.to_user(&ctx.http()).await {
+            match subscriber.to_user(&ctx).await {
                 Ok(u) => {
                     if let Err(e) = u
                         .direct_message(
-                            &ctx.http(),
+                            &ctx,
                             create_embed(format!(
                                 "{message}
 

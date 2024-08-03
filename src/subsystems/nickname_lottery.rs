@@ -12,7 +12,7 @@ use rand::{
 };
 use serde::{Deserialize, Serialize};
 use serenity::{
-    all::{CacheHttp as _, CommandDataOptionValue, CreateModal, Guild, Mentionable as _, UserId},
+    all::{CommandDataOptionValue, CreateModal, Guild, Mentionable as _, UserId},
     async_trait,
     model::{channel::ChannelType, id::ChannelId, Permissions},
     prelude::Context,
@@ -279,7 +279,7 @@ impl Subsystem for NicknameLottery {
 
                             command
                                 .create_response(
-                                    &ctx.http(),
+                                    &ctx,
                                     serenity::all::CreateInteractionResponse::Modal(
                                         CreateModal::new(
                                             user.id.to_string() + "_" + &nickname + "_context",
@@ -330,7 +330,7 @@ impl Subsystem for NicknameLottery {
 
                                 // it's now safe to close the modal, so send a response to it
                                 int.create_response(
-                                    &ctx.http(),
+                                    &ctx,
                                     serenity::all::CreateInteractionResponse::Acknowledge,
                                 )
                                 .await?;
@@ -419,7 +419,7 @@ Originally added by {} ({})
                                             .map(|uid| uid.mention().to_string())
                                             .unwrap_or("`user not known`".to_string()),
                                     nickname.time()
-                                            .map(|time| format!("<t:{}:F>", time.timestamp().to_string()))
+                                            .map(|time| format!("<t:{}:F>", time.timestamp()))
                                             .unwrap_or("`time not known`".to_string()),
                                     nickname.context()
                                             .unwrap_or(&"No context provided.".to_string()),
@@ -501,7 +501,7 @@ Consider checking their nickname list for valid number to remove.",
 
                             command
                                 .create_response(
-                                    &ctx.http(),
+                                    &ctx,
                                     serenity::all::CreateInteractionResponse::Modal(
                                         CreateModal::new(
                                             user.id.to_string() + "_" + nickname.nickname() + "_context",
@@ -552,7 +552,7 @@ Consider checking their nickname list for valid number to remove.",
 
                                 // it's now safe to close the modal, so send a response to it
                                 int.create_response(
-                                    &ctx.http(),
+                                    &ctx,
                                     serenity::all::CreateInteractionResponse::Acknowledge,
                                 )
                                 .await?;
@@ -624,7 +624,7 @@ Originally added by {} ({})
                                             .map(|uid| uid.mention().to_string())
                                             .unwrap_or("`user not known`".to_string()),
                                     nickname.time()
-                                            .map(|time| format!("<t:{}:F>", time.timestamp().to_string()))
+                                            .map(|time| format!("<t:{}:F>", time.timestamp()))
                                             .unwrap_or("`time not known`".to_string()),
                                     nickname.context()
                                             .unwrap_or(&"No context provided.".to_string()),
@@ -784,7 +784,7 @@ Maximum time between lotteries: {}",
                     "Configure announcements when the bot fails to change a user's nickname.",
                     PermissionType::ServerPerms(Permissions::MANAGE_CHANNELS),
                     Some(Box::new(move |ctx, command, params| {
-                        Box::pin(async {
+                        Box::pin(async move {
                             // Set announcement channel if it's been supplied.
                             if let Some(channel_opt) =
                                 params.iter().find(|opt| opt.name == "channel")
@@ -794,7 +794,7 @@ Maximum time between lotteries: {}",
                                 let guild = config.guild_mut(&command.guild_id.unwrap());
                                 if let CommandDataOptionValue::Channel(channel) = &channel_opt.value
                                 {
-                                    let channel = channel.to_channel(&ctx.http()).await?;
+                                    let channel = channel.to_channel(&ctx).await?;
                                     guild
                                         .nickname_lottery_data_mut()
                                         .set_channel(Some(channel.id()));
@@ -829,7 +829,7 @@ Title text: {}",
                                 lottery_data
                                     .channel()
                                     .unwrap()
-                                    .to_channel(&ctx.http())
+                                    .to_channel(&ctx)
                                     .await?,
                                 lottery_data.title()
                             );
@@ -974,7 +974,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
             if let Some(guild) = get_guild(&data, &g.id) {
                 let lottery_data = guild.nickname_lottery_data();
                 if let Some(user) = lottery_data.get_random_user() {
-                    if let Ok(member) = g.member(&ctx.http(), user).await {
+                    if let Ok(member) = g.member(&ctx, user).await {
                         let user = &member.user;
                         if let Some(mut new_nick) =
                             lottery_data.get_nickname_for_user(&user.id).cloned()
@@ -1000,7 +1000,7 @@ _Nickname changes are disabled for this guild until next initialisation._",
                             let mut post_name_change = is_april_fools;
                             if let Err(e) = g
                                 .edit_member(
-                                    &ctx.http(),
+                                    &ctx,
                                     user.id,
                                     serenity::all::EditMember::new().nickname(&new_nick),
                                 )
@@ -1015,14 +1015,14 @@ _Nickname changes are disabled for this guild until next initialisation._",
                             }
                             if post_name_change {
                                 if let Some(channel_id) = lottery_data.channel() {
-                                    let channel = match channel_id.to_channel(&ctx.http()).await {
+                                    let channel = match channel_id.to_channel(&ctx).await {
                                         Ok(channel) => channel.guild(),
                                         Err(_) => None,
                                     };
                                     if let Some(channel) = channel {
                                         channel
                                             .send_message(
-                                                &ctx.http(),
+                                                &ctx,
                                                 create_embed(format!(
                                                     "**{}**
 {} won/lost the lottery! From now on, they are to be named: `{}`",

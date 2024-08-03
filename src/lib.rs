@@ -5,7 +5,6 @@ mod serenity_handler;
 mod subsystems;
 
 pub use log::{error, info};
-use serenity::all::CacheHttp as _;
 pub use serenity::{
     model::Colour,
     prelude::{GatewayIntents, Mentionable},
@@ -22,7 +21,7 @@ const COLOUR: Colour = Colour::new(0x0099ff);
 // retrieve version + repo information from the `Cargo.toml` at
 // compile-time.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const GITHUB_URL: &str = env!("CARGO_PKG_REPOSITORY");
+const REPO_URL: &str = env!("CARGO_PKG_REPOSITORY");
 
 macro_rules! acquire_data_handle {
     ($ctx:ident) => { acquire_data_handle!(read $ctx) };
@@ -108,7 +107,7 @@ fn generate_commands() -> Vec<Command<'static>> {
         "Provides information about Loki.",
         command::PermissionType::Universal,
         Some(Box::new(move |ctx, _command, _params| {
-            Box::pin(async {
+            Box::pin(async move {
                 let manager_tag = ctx
                     .data
                     .read()
@@ -116,13 +115,13 @@ fn generate_commands() -> Vec<Command<'static>> {
                     .get::<Config>()
                     .unwrap()
                     .get_manager()
-                    .to_user(&ctx.http())
+                    .to_user(&ctx)
                     .await?
                     .mention();
                 Ok(Some(ActionResponse::new(
                     create_raw_embed(format!(
                         "Loki is a trickster ~~god~~ bot.
-Version [{VERSION}]({GITHUB_URL}/releases/tag/v{VERSION}); [source code]({GITHUB_URL}).
+Version [{VERSION}]({REPO_URL}/releases/tag/v{VERSION}); [source code]({REPO_URL}).
 
 This instance of Loki is managed by {manager_tag}.
 

@@ -24,7 +24,7 @@ impl Subsystem for ThreadReviver {
     }
 
     async fn thread(&self, ctx: &Context, thread: &GuildChannel) {
-        Self::revive_thread(&ctx.http(), thread).await;
+        Self::revive_thread(&ctx, thread).await;
     }
 }
 
@@ -52,12 +52,12 @@ impl ThreadReviver {
         for (channel_id, channel) in g.channels {
             if channel.kind == ChannelType::Text {
                 match channel_id
-                    .get_archived_private_threads(&ctx.http(), None, None)
+                    .get_archived_private_threads(&ctx, None, None)
                     .await
                 {
                     Ok(threads_data) => {
                         for thread in threads_data.threads {
-                            Self::revive_thread(&ctx.http(), &thread).await;
+                            Self::revive_thread(&ctx, &thread).await;
                         }
                     }
                     Err(error) => {
@@ -69,12 +69,12 @@ impl ThreadReviver {
                     }
                 };
                 match channel_id
-                    .get_archived_public_threads(&ctx.http(), None, None)
+                    .get_archived_public_threads(&ctx, None, None)
                     .await
                 {
                     Ok(threads_data) => {
                         for thread in threads_data.threads {
-                            Self::revive_thread(&ctx.http(), &thread).await;
+                            Self::revive_thread(&ctx, &thread).await;
                         }
                     }
                     Err(error) => {

@@ -3,8 +3,8 @@ use crate::config::Config;
 use crate::subsystems;
 use log::{error, info, trace, warn};
 use serenity::all::{
-    ActivityData, CacheHttp as _, Command, CommandDataOptionValue, CommandOptionType,
-    GuildMemberUpdateEvent, Interaction,
+    ActivityData, Command, CommandDataOptionValue, CommandOptionType, GuildMemberUpdateEvent,
+    Interaction,
 };
 use serenity::builder::{CreateCommand, CreateCommandOption};
 #[cfg(debug_assertions)]
@@ -362,7 +362,7 @@ impl<'a> SerenityHandler<'a> {
                     ("Couldn't parse 'LOKI_DEBUG_GUILD_ID' as a u64: ".to_owned() + DEBUG_GUILD_ID)
                 )
             }))
-            .to_partial_guild(&ctx.http())
+            .to_partial_guild(&ctx)
             .await
             .unwrap();
             guild
@@ -372,7 +372,7 @@ impl<'a> SerenityHandler<'a> {
         }
         #[cfg(not(debug_assertions))]
         {
-            Command::set_global_commands(&ctx.http(), commands)
+            Command::set_global_commands(&ctx, commands)
                 .await
                 .expect("Failed to create command")
         }
