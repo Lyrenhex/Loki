@@ -481,8 +481,8 @@ You've got until <t:{next_reset}:F>.",
                         &g.id
                     );
                 }
+                tokio::time::sleep(Duration::new(300, 0)).await;
             }
-            tokio::time::sleep(Duration::new(300, 0)).await;
         }
     }
 }
