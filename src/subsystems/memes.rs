@@ -446,10 +446,6 @@ You've got until <t:{next_reset}:F>.",
                     time_until_reset.num_seconds()
                 );
                 tokio::time::sleep(time_until_reset.to_std().unwrap()).await;
-                // in case the settings have changed during
-                // our long slumber, give the earlier checks
-                // another go:
-                return Ok(());
             }
             Self::process_memes(ctx, g).await
         } else {
@@ -481,8 +477,8 @@ You've got until <t:{next_reset}:F>.",
                         &g.id
                     );
                 }
-                tokio::time::sleep(Duration::new(300, 0)).await;
             }
+            tokio::time::sleep(Duration::new(300, 0)).await;
         }
     }
 }
